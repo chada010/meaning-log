@@ -37,7 +37,10 @@ const getResponseMessage = (error: AxiosError) => {
   return undefined
 }
 
-const isAiPath = (path: string) => /\/logs(?:\/\d+)?\/ai(?:\/|$)/.test(path)
+const isAiPath = (path: string) => (
+  /\/logs(?:\/\d+)?\/ai(?:\/|$)/.test(path) ||
+  path.endsWith('/trial/analyze')
+)
 
 const isLoginPath = (path: string) => path.endsWith('/auth/login')
 

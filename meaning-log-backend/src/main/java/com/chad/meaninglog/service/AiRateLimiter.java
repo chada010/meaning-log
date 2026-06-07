@@ -23,14 +23,27 @@ public class AiRateLimiter {
     @Value("${ai.rate-limit.window-seconds:60}")
     private long windowSeconds;
 
+    @Value("${ai.trial-rate-limit.max-requests:3}")
+    private int trialMaxRequests;
+
+    @Value("${ai.trial-rate-limit.window-seconds:300}")
+    private long trialWindowSeconds;
+
     public void check(UserAccount user) {
-        String key = "ai:rate-limit:user:" + user.getId();
+        check("ai:rate-limit:user:" + user.getId(), maxRequests, windowSeconds);
+    }
+
+    public void checkTrial(String ip) {
+        check("ai:rate-limit:trial:" + ip, trialMaxRequests, trialWindowSeconds);
+    }
+
+    private void check(String key, int limit, long window) {
         try {
             Long count = redisTemplate.opsForValue().increment(key);
             if (count != null && count == 1L) {
-                redisTemplate.expire(key, Duration.ofSeconds(windowSeconds));
+                redisTemplate.expire(key, Duration.ofSeconds(window));
             }
-            if (count != null && count > maxRequests) {
+            if (count != null && count > limit) {
                 throw new ResponseStatusException(
                         HttpStatus.TOO_MANY_REQUESTS,
                         "AI requests are too frequent. Please try again later."

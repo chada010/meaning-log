@@ -13,6 +13,7 @@ const props = defineProps<{
   initialValue?: MeaningLogRequest
   draftKey?: string
   submitting?: boolean
+  submitLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -435,7 +436,7 @@ const handleSubmit = async () => {
 
     <div class="form-actions">
       <el-button @click="emit('cancel')">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="handleSubmit">保存日志</el-button>
+      <el-button type="primary" :loading="submitting" @click="handleSubmit">{{ submitLabel ?? '保存日志' }}</el-button>
     </div>
   </el-form>
 </template>

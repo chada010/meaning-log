@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { useAuthStore } from '../stores/authStore'
+import { persistPendingTrial } from '../api/trial'
 import type { LoginRequest } from '../api/auth'
 
 const route = useRoute()
@@ -29,8 +30,13 @@ const submit = async () => {
   submitting.value = true
   try {
     await authStore.login(form)
-    ElMessage.success('登录成功')
-    router.push((route.query.redirect as string) || '/')
+    const newLogId = await persistPendingTrial()
+    ElMessage.success(newLogId ? '已经替你把那条小记收好了' : '登录成功')
+    if (newLogId) {
+      router.push({ name: 'log-detail', params: { id: newLogId } })
+    } else {
+      router.push((route.query.redirect as string) || '/')
+    }
   } finally {
     submitting.value = false
   }
@@ -63,6 +69,7 @@ const submit = async () => {
       <div class="auth-links">
         <RouterLink to="/register">注册账号</RouterLink>
         <RouterLink to="/reset-password">忘记密码</RouterLink>
+        <RouterLink to="/trial">先随便写写，体验一下</RouterLink>
       </div>
     </div>
   </section>

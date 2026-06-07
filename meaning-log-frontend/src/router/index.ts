@@ -23,6 +23,11 @@ const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      path: '/trial',
+      name: 'trial',
+      component: () => import('../views/TrialView.vue'),
+    },
+    {
       path: '/',
       name: 'home',
       component: HomeView,

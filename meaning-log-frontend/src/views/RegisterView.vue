@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { useAuthStore } from '../stores/authStore'
+import { persistPendingTrial } from '../api/trial'
 import type { RegisterRequest } from '../api/auth'
 
 const router = useRouter()
@@ -36,8 +37,9 @@ const submit = async () => {
   submitting.value = true
   try {
     await authStore.register(form)
-    ElMessage.success('注册成功')
-    router.push({ name: 'home' })
+    const newLogId = await persistPendingTrial()
+    ElMessage.success(newLogId ? '已经替你把第一条小记收好了' : '注册成功')
+    router.push(newLogId ? { name: 'log-detail', params: { id: newLogId } } : { name: 'home' })
   } finally {
     submitting.value = false
   }
@@ -73,6 +75,7 @@ const submit = async () => {
 
       <div class="auth-links">
         <RouterLink to="/login">已有账号，去登录</RouterLink>
+        <RouterLink to="/trial">先随便写写，体验一下</RouterLink>
       </div>
     </div>
   </section>
