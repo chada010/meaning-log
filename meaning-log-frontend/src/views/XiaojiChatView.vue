@@ -76,8 +76,8 @@ const sendMessage = async () => {
   sending.value = true
 
   // 占位 assistant 消息，流式 chunk 追加到这里
-  const placeholder: AiChatMessage = { id: Date.now() + 1, role: 'assistant', content: '', createdAt: '' }
-  messages.value.push(placeholder)
+  messages.value.push({ id: Date.now() + 1, role: 'assistant', content: '', createdAt: '' })
+  const placeholderIndex = messages.value.length - 1
   await scrollChatToBottom()
 
   try {
@@ -85,7 +85,7 @@ const sendMessage = async () => {
       '/xiaoji/chat/stream',
       { message, sessionId: activeSessionId.value ?? null },
       (chunk) => {
-        placeholder.content += chunk
+        messages.value[placeholderIndex].content += chunk
         scrollChatToBottom()
       },
       (sessionId) => {
@@ -94,7 +94,9 @@ const sendMessage = async () => {
     )
     await loadSessions()
   } catch {
-    placeholder.content = placeholder.content || '小记暂时没有回应，请稍后再试。'
+    if (!messages.value[placeholderIndex].content) {
+      messages.value[placeholderIndex].content = '小记暂时没有回应，请稍后再试。'
+    }
     ElMessage.error('AI 服务暂时不可用，日志仍可正常记录')
   } finally {
     sending.value = false
