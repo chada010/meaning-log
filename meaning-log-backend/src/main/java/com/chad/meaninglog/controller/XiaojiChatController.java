@@ -1,5 +1,6 @@
 package com.chad.meaninglog.controller;
 
+import com.chad.meaninglog.client.OpenAiClient;
 import com.chad.meaninglog.dto.AiChatMessageResponse;
 import com.chad.meaninglog.dto.AiChatRequest;
 import com.chad.meaninglog.dto.AiChatResponse;
