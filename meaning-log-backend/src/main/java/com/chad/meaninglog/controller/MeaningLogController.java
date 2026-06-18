@@ -11,6 +11,7 @@ import com.chad.meaninglog.dto.MeaningLogRequest;
 import com.chad.meaninglog.dto.MeaningLogResponse;
 import com.chad.meaninglog.entity.LogImage;
 import com.chad.meaninglog.entity.UserAccount;
+import com.chad.meaninglog.service.AiService;
 import com.chad.meaninglog.service.MeaningLogService;
 import com.chad.meaninglog.service.XiaojiChatService;
 import jakarta.validation.Valid;
@@ -31,9 +32,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
@@ -43,6 +46,8 @@ public class MeaningLogController {
 
     private final MeaningLogService meaningLogService;
     private final XiaojiChatService xiaojiChatService;
+    private final AiService aiService;
+    private final ExecutorService sseExecutorService;
 
     @GetMapping
     public List<MeaningLogResponse> findAll(
@@ -138,6 +143,41 @@ public class MeaningLogController {
         return meaningLogService.generateAiForLog(user, id);
     }
 
+    @PostMapping(value = "/{id}/ai/stream", produces = "text/event-stream")
+    public SseEmitter generateAiForLogStream(
+            @AuthenticationPrincipal UserAccount user,
+            @PathVariable Long id
+    ) {
+        SseEmitter emitter = new SseEmitter(120_000L);
+        MeaningLogService.AnalyzeStreamContext ctx = meaningLogService.prepareAnalyzeStream(user, id);
+
+        sseExecutorService.submit(() -> {
+            try {
+                aiService.streamAnalyzeLog(ctx.log(), ctx.images(),
+                        chunk -> {
+                            try {
+                                emitter.send(SseEmitter.event().data(chunk));
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        },
+                        () -> {
+                            try {
+                                emitter.send(SseEmitter.event().name("done").data(""));
+                                emitter.complete();
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        }
+                );
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
+    }
+
     @PostMapping("/{id}/ai/chat")
     public AiChatResponse previewAiForLog(
             @AuthenticationPrincipal UserAccount user,
@@ -229,5 +269,94 @@ public class MeaningLogController {
             @Valid @RequestBody AiChatRequest request
     ) {
         return xiaojiChatService.chatWithReport(user, reportId, request.getMessage());
+    }
+
+    @PostMapping(value = "/{id}/ai/chat/stream", produces = "text/event-stream")
+    public SseEmitter chatStreamForLog(
+            @AuthenticationPrincipal UserAccount user,
+            @PathVariable Long id,
+            @Valid @RequestBody AiChatRequest request
+    ) {
+        SseEmitter emitter = new SseEmitter(120_000L);
+        XiaojiChatService.LogRefineStreamContext ctx =
+                xiaojiChatService.prepareLogRefineStream(user, id, request.getMessage());
+
+        StringBuilder buffer = new StringBuilder();
+
+        sseExecutorService.submit(() -> {
+            try {
+                aiService.streamRefineLogSummary(
+                        ctx.log(), ctx.history(), ctx.images(), request.getMessage(),
+                        chunk -> {
+                            try {
+                                buffer.append(chunk);
+                                emitter.send(SseEmitter.event().data(chunk));
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        },
+                        () -> {
+                            try {
+                                xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
+                                emitter.send(SseEmitter.event().name("done").data(""));
+                                emitter.complete();
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        }
+                );
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
+    }
+
+    @PostMapping(value = "/ai/reports/{reportId}/chat/stream", produces = "text/event-stream")
+    public SseEmitter chatStreamForReport(
+            @AuthenticationPrincipal UserAccount user,
+            @PathVariable Long reportId,
+            @Valid @RequestBody AiChatRequest request
+    ) {
+        SseEmitter emitter = new SseEmitter(120_000L);
+        XiaojiChatService.ReportRefineStreamContext ctx =
+                xiaojiChatService.prepareReportRefineStream(user, reportId, request.getMessage());
+
+        StringBuilder buffer = new StringBuilder();
+
+        sseExecutorService.submit(() -> {
+            try {
+                aiService.streamRefineReport(
+                        ctx.report().getTitle(),
+                        ctx.report().getPeriod(),
+                        ctx.report().getSummary(),
+                        ctx.report().getTags(),
+                        ctx.history(),
+                        request.getMessage(),
+                        chunk -> {
+                            try {
+                                buffer.append(chunk);
+                                emitter.send(SseEmitter.event().data(chunk));
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        },
+                        () -> {
+                            try {
+                                xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
+                                emitter.send(SseEmitter.event().name("done").data(""));
+                                emitter.complete();
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        }
+                );
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
     }
 }

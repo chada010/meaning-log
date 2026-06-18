@@ -114,6 +114,42 @@ public class OpenAiClient {
         return readJson(contentText, LogAiResult.class);
     }
 
+    public void streamAnalyzeLog(
+            String logDate,
+            String title,
+            String mood,
+            String content,
+            List<ImageInput> images,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        String userPrompt = """
+                请分析下面这条日志和随日志上传的图片，为它生成更适合回顾的 AI 标题、温柔总结和标签。
+
+                输出 JSON 格式必须是：
+                {"title":"标题","summary":"总结","tags":["标签1","标签2"]}
+
+                字段要求：
+                - title：不超过 30 个汉字，温柔、具体、有画面感。
+                - summary：80 到 180 个汉字，像小记在轻轻帮用户回看今天。
+                - tags：2 到 6 个简短中文标签，每个不超过 8 个汉字。
+                - 如果有图片，请结合图片中能确定的内容，比如美景、作品、场景或完成成果；不能确定的不要猜。
+
+                日志日期：%s
+                用户原始标题：%s
+                用户心情：%s
+                日志内容：
+                %s
+                """.formatted(logDate, title, blankToNone(mood), content);
+
+        List<Map<String, Object>> messages = List.of(
+                Map.of("role", "system", "content", JOURNAL_ASSISTANT_PROMPT),
+                Map.of("role", "user", "content", buildUserContent(userPrompt, images))
+        );
+
+        streamChatCompletion(messages, 900, 0.7, onChunk, onComplete);
+    }
+
     public LogAiResult refineLogSummary(
             String logDate,
             String title,
@@ -282,6 +318,108 @@ public class OpenAiClient {
 
         String contentText = createChatCompletion(messages, 1200, 0.7);
         return readJson(contentText, AiReportResponse.class);
+    }
+
+    public void streamRefineLogSummary(
+            String logDate,
+            String title,
+            String mood,
+            String content,
+            String currentAiTitle,
+            String currentAiSummary,
+            String currentAiTags,
+            List<ChatTurn> history,
+            List<ImageInput> images,
+            String userMessage,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        String contextPrompt = """
+                用户正在和你对话，希望你基于原始日志和当前 AI 整理结果，按他的要求改善总结内容。
+                请把用户的偏好落实到新的 AI 标题、总结和标签里，而不是只回答建议。
+
+                输出 JSON 格式必须是：
+                {"title":"标题","summary":"总结","tags":["标签1","标签2"]}
+
+                字段要求：
+                - title：不超过 30 个汉字，温柔、具体、有画面感。
+                - summary：80 到 220 个汉字，允许比原总结更贴合用户要求。
+                - tags：2 到 6 个简短中文标签，每个不超过 8 个汉字。
+                - 必须基于日志事实和图片中能确定的内容，不要编造新事件或看不清的细节。
+                - 不要使用 emoji，不要使用 Markdown。
+
+                日志日期：%s
+                用户原始标题：%s
+                用户心情：%s
+                日志内容：
+                %s
+
+                当前 AI 标题：%s
+                当前 AI 总结：%s
+                当前 AI 标签：%s
+
+                """.formatted(
+                logDate,
+                title,
+                blankToNone(mood),
+                content,
+                blankToNone(currentAiTitle),
+                blankToNone(currentAiSummary),
+                blankToNone(currentAiTags)
+        );
+
+        List<Map<String, Object>> messages = new java.util.ArrayList<>();
+        messages.add(Map.of("role", "system", "content", JOURNAL_ASSISTANT_PROMPT));
+        messages.add(Map.of("role", "user", "content", buildUserContent(contextPrompt, images)));
+        messages.addAll(history.stream()
+                .map(turn -> Map.<String, Object>of("role", turn.role(), "content", turn.content()))
+                .toList());
+        messages.add(Map.of("role", "user", "content", userMessage));
+
+        streamChatCompletion(messages, 900, 0.7, onChunk, onComplete);
+    }
+
+    public void streamRefineReport(
+            String title,
+            String period,
+            String summary,
+            String tags,
+            List<ChatTurn> history,
+            String userMessage,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        String contextPrompt = """
+                用户正在和你对话，希望你基于当前 AI 报告内容，按他的要求改善报告。
+                请把用户的偏好落实到新的报告标题、正文和标签里，而不是只回答建议。
+
+                输出 JSON 格式必须是：
+                {"title":"报告标题","period":"时间范围","summary":"报告正文","tags":"标签1,标签2,标签3"}
+
+                字段要求：
+                - title：保留或优化为适合展示的报告标题。
+                - period：保留当前时间范围。
+                - summary：180 到 650 个汉字，允许分成自然段，但必须放在 JSON 字符串里。
+                - tags：用英文逗号分隔，3 到 8 个中文标签。
+                - 不要编造当前报告没有依据的新事实。
+                - 不要使用 emoji，不要使用 Markdown。
+
+                当前报告标题：%s
+                当前时间范围：%s
+                当前报告正文：
+                %s
+                当前标签：%s
+                """.formatted(title, period, summary, blankToNone(tags));
+
+        List<Map<String, Object>> messages = new java.util.ArrayList<>();
+        messages.add(Map.of("role", "system", "content", REPORT_ASSISTANT_PROMPT));
+        messages.add(Map.of("role", "user", "content", contextPrompt));
+        messages.addAll(history.stream()
+                .map(turn -> Map.<String, Object>of("role", turn.role(), "content", turn.content()))
+                .toList());
+        messages.add(Map.of("role", "user", "content", userMessage));
+
+        streamChatCompletion(messages, 1200, 0.7, onChunk, onComplete);
     }
 
     public void streamChatCompletion(

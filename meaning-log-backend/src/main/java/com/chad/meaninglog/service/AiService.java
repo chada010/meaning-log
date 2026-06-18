@@ -32,6 +32,23 @@ public class AiService {
         );
     }
 
+    public void streamAnalyzeLog(
+            MeaningLog log,
+            List<LogImage> images,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        openAiClient.streamAnalyzeLog(
+                log.getLogDate().toString(),
+                log.getTitle(),
+                log.getMood(),
+                log.getContent(),
+                toImageInputs(images),
+                onChunk,
+                onComplete
+        );
+    }
+
     public LogAiResult refineLogSummary(MeaningLog log, String message) {
         return refineLogSummary(log, List.of(), message);
     }
@@ -81,6 +98,43 @@ public class AiService {
                 .collect(Collectors.joining("\n\n"));
 
         return openAiClient.summarizeReport(title, period, logsText);
+    }
+
+    public void streamRefineLogSummary(
+            MeaningLog log,
+            List<OpenAiClient.ChatTurn> history,
+            List<LogImage> images,
+            String message,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        openAiClient.streamRefineLogSummary(
+                log.getLogDate().toString(),
+                log.getTitle(),
+                log.getMood(),
+                log.getContent(),
+                log.getAiTitle(),
+                log.getAiSummary(),
+                log.getAiTags(),
+                history,
+                toImageInputs(images),
+                message,
+                onChunk,
+                onComplete
+        );
+    }
+
+    public void streamRefineReport(
+            String title,
+            String period,
+            String summary,
+            String tags,
+            List<OpenAiClient.ChatTurn> history,
+            String message,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        openAiClient.streamRefineReport(title, period, summary, tags, history, message, onChunk, onComplete);
     }
 
     public AiReportResponse refineReport(

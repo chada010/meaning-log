@@ -117,6 +117,16 @@ public class MeaningLogService {
         meaningLogRepository.delete(meaningLog);
     }
 
+    public record AnalyzeStreamContext(MeaningLog log, List<LogImage> images) {}
+
+    @Transactional(readOnly = true)
+    public AnalyzeStreamContext prepareAnalyzeStream(UserAccount user, Long id) {
+        aiRateLimiter.check(user);
+        MeaningLog meaningLog = getMeaningLog(user, id);
+        List<LogImage> images = logImageRepository.findByMeaningLogOrderByDisplayOrderAscIdAsc(meaningLog);
+        return new AnalyzeStreamContext(meaningLog, images);
+    }
+
     @Transactional
     public MeaningLogResponse generateAiForLog(UserAccount user, Long id) {
         aiRateLimiter.check(user);

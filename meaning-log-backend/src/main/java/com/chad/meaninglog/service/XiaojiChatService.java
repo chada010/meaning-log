@@ -9,6 +9,7 @@ import com.chad.meaninglog.dto.LogAiResult;
 import com.chad.meaninglog.entity.AiChatMessage;
 import com.chad.meaninglog.entity.AiChatSession;
 import com.chad.meaninglog.entity.AiReport;
+import com.chad.meaninglog.entity.LogImage;
 import com.chad.meaninglog.entity.MeaningLog;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.repository.AiChatMessageRepository;
@@ -174,6 +175,44 @@ public class XiaojiChatService {
                 null,
                 findMessages(user, session.getId())
         );
+    }
+
+    public record LogRefineStreamContext(
+            AiChatSession session,
+            MeaningLog log,
+            List<LogImage> images,
+            List<OpenAiClient.ChatTurn> history
+    ) {}
+
+    public record ReportRefineStreamContext(
+            AiChatSession session,
+            AiReport report,
+            List<OpenAiClient.ChatTurn> history
+    ) {}
+
+    @Transactional
+    public LogRefineStreamContext prepareLogRefineStream(UserAccount user, Long logId, String userMessage) {
+        aiRateLimiter.check(user);
+        MeaningLog log = meaningLogRepository.findByIdAndUser(logId, user)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Log not found"));
+        AiChatSession session = getOrCreateLogSession(user, log);
+        List<OpenAiClient.ChatTurn> history = recentTurns(session);
+        List<LogImage> images = logImageRepository.findByMeaningLogOrderByDisplayOrderAscIdAsc(log);
+
+        saveMessage(session, AiChatMessage.Role.USER, userMessage);
+        return new LogRefineStreamContext(session, log, images, history);
+    }
+
+    @Transactional
+    public ReportRefineStreamContext prepareReportRefineStream(UserAccount user, Long reportId, String userMessage) {
+        aiRateLimiter.check(user);
+        AiReport report = aiReportRepository.findByIdAndUser(reportId, user)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "AI report not found"));
+        AiChatSession session = getOrCreateReportSession(user, report);
+        List<OpenAiClient.ChatTurn> history = recentTurns(session);
+
+        saveMessage(session, AiChatMessage.Role.USER, userMessage);
+        return new ReportRefineStreamContext(session, report, history);
     }
 
     /**
