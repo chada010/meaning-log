@@ -682,6 +682,42 @@ a {
   margin-bottom: 18px;
 }
 
+.ai-streaming {
+  padding: 20px;
+  border: 1px solid #e4efea;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(244, 250, 247, 0.85));
+  margin-bottom: 4px;
+}
+
+.ai-streaming .eyebrow {
+  margin: 0 0 12px;
+  opacity: 0.7;
+}
+
+.ai-streaming-text {
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  color: #415852;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.cursor {
+  display: inline-block;
+  animation: blink 0.8s step-end infinite;
+  color: #4caf8a;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .ai-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

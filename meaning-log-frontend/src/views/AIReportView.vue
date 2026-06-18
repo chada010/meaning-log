@@ -4,7 +4,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import {
   applyAiReport,
-  chatWithAiReport,
+  chatWithAiReportStream,
   generateAiReport,
   generateDailySummary,
   getAiReportChat,
@@ -221,10 +221,13 @@ const sendChatMessage = async () => {
   await scrollChatToBottom()
 
   try {
-    const { data } = await chatWithAiReport(report.value.id, message)
-    previewReport.value = data.reportSuggestion
+    const suggestion = await chatWithAiReportStream(report.value.id, message)
+    previewReport.value = suggestion
+    const { data } = await getAiReportChat(report.value.id)
     chatMessages.value = data.messages.length ? data.messages : chatMessages.value
     ElMessage.success('小记生成了一版报告预览')
+  } catch {
+    ElMessage.error('AI 服务暂时不可用，报告仍可正常查看')
   } finally {
     chatLoading.value = false
     await scrollChatToBottom()

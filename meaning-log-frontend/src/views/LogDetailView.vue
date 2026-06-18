@@ -5,9 +5,9 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   applyLogAi,
-  chatWithLogAi,
+  chatWithLogAiStream,
   deleteLog,
-  generateLogAi,
+  generateLogAiStream,
   getLogAiChat,
   getLogDetail,
   getLogNavigation,
@@ -27,6 +27,7 @@ const log = ref<MeaningLog>()
 const navigation = ref<LogNavigation>()
 const loading = ref(false)
 const aiLoading = ref(false)
+const streamingText = ref('')
 const chatVisible = ref(false)
 const chatLoading = ref(false)
 const applyLoading = ref(false)
@@ -147,11 +148,19 @@ const goLog = (id?: number) => {
 
 const handleGenerateAi = async () => {
   aiLoading.value = true
+  streamingText.value = ''
   try {
     lastAiSnapshot.value = currentAiSnapshot()
-    const { data } = await generateLogAi(props.id)
+    const suggestion = await generateLogAiStream(props.id, chunk => {
+      streamingText.value += chunk
+    })
+    streamingText.value = ''
+    const { data } = await applyLogAi(props.id, suggestion)
     log.value = data
     ElMessage.success('小记已经整理好啦')
+  } catch {
+    streamingText.value = ''
+    ElMessage.error('AI 服务暂时不可用，日志仍可正常记录')
   } finally {
     aiLoading.value = false
   }
@@ -164,10 +173,13 @@ const askXiaojiForLog = async (message: string) => {
   await scrollChatToBottom()
 
   try {
-    const { data } = await chatWithLogAi(props.id, message)
-    previewSuggestion.value = data.suggestion
+    const suggestion = await chatWithLogAiStream(props.id, message)
+    previewSuggestion.value = suggestion
+    const { data } = await getLogAiChat(props.id)
     chatMessages.value = data.messages.length ? data.messages : chatMessages.value
     ElMessage.success('小记整理出一版预览了')
+  } catch {
+    ElMessage.error('AI 服务暂时不可用，日志仍可正常记录')
   } finally {
     chatLoading.value = false
     await scrollChatToBottom()
@@ -220,10 +232,13 @@ const sendChatMessage = async () => {
   await scrollChatToBottom()
 
   try {
-    const { data } = await chatWithLogAi(props.id, message)
-    previewSuggestion.value = data.suggestion
+    const suggestion = await chatWithLogAiStream(props.id, message)
+    previewSuggestion.value = suggestion
+    const { data } = await getLogAiChat(props.id)
     chatMessages.value = data.messages.length ? data.messages : chatMessages.value
     ElMessage.success('小记生成了一版预览')
+  } catch {
+    ElMessage.error('AI 服务暂时不可用，日志仍可正常记录')
   } finally {
     chatLoading.value = false
     await scrollChatToBottom()
@@ -393,8 +408,13 @@ watch(() => props.id, loadDetail)
           </div>
         </div>
 
+        <div v-if="aiLoading && streamingText" class="ai-streaming">
+          <p class="eyebrow">小记正在整理…</p>
+          <pre class="ai-streaming-text">{{ streamingText }}<span class="cursor">▋</span></pre>
+        </div>
+
         <el-empty
-          v-if="!log.aiTitle && !log.aiSummary && !log.aiTags"
+          v-else-if="!log.aiTitle && !log.aiSummary && !log.aiTags"
           description="还没有 AI 分析，点击 AI 生成，让小记帮你轻轻整理一下。"
         />
 
