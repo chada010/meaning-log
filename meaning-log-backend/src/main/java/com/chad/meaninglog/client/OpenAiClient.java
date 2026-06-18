@@ -11,8 +11,12 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Component
 public class OpenAiClient {
@@ -178,6 +182,21 @@ public class OpenAiClient {
         return createChatCompletion(messages, 900, 0.75);
     }
 
+    public void streamChatWithCompanion(
+            List<ChatTurn> history,
+            String userMessage,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        List<Map<String, Object>> messages = new java.util.ArrayList<>();
+        messages.add(Map.of("role", "system", "content", COMPANION_ASSISTANT_PROMPT));
+        messages.addAll(history.stream()
+                .map(turn -> Map.<String, Object>of("role", turn.role(), "content", turn.content()))
+                .toList());
+        messages.add(Map.of("role", "user", "content", userMessage));
+        streamChatCompletion(messages, 900, 0.75, onChunk, onComplete);
+    }
+
     public AiReportResponse summarizeReport(String title, String period, String logsText) {
         String focus = reportFocus(title);
         String userPrompt = """
@@ -263,6 +282,67 @@ public class OpenAiClient {
 
         String contentText = createChatCompletion(messages, 1200, 0.7);
         return readJson(contentText, AiReportResponse.class);
+    }
+
+    public void streamChatCompletion(
+            List<Map<String, Object>> messages,
+            int maxTokens,
+            double temperature,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        ensureConfigured();
+
+        Map<String, Object> request = Map.of(
+                "model", model,
+                "messages", messages,
+                "temperature", temperature,
+                "max_tokens", maxTokens,
+                "stream", true
+        );
+
+        try {
+            restClient.post()
+                    .uri("/chat/completions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .body(request)
+                    .exchange((req, resp) -> {
+                        try (BufferedReader reader = new BufferedReader(
+                                new InputStreamReader(resp.getBody(), StandardCharsets.UTF_8))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                if (line.isBlank()) {
+                                    continue;
+                                }
+                                if (!line.startsWith("data:")) {
+                                    continue;
+                                }
+                                String data = line.substring(5).trim();
+                                if ("[DONE]".equals(data)) {
+                                    onComplete.run();
+                                    break;
+                                }
+                                try {
+                                    JsonNode node = objectMapper.readTree(data);
+                                    JsonNode content = node.path("choices").path(0).path("delta").path("content");
+                                    if (content.isTextual() && !content.asText().isEmpty()) {
+                                        onChunk.accept(content.asText());
+                                    }
+                                } catch (Exception ignored) {
+                                    // 跳过无法解析的 SSE 行
+                                }
+                            }
+                        }
+                        return null;
+                    });
+        } catch (RestClientResponseException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "AI stream request failed: " + extractProviderError(ex),
+                    ex
+            );
+        }
     }
 
     private String createChatCompletion(String systemPrompt, String userPrompt, int maxTokens) {

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ChatDotRound, Plus, Promotion } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import {
-  chatWithXiaoji,
   getXiaojiMessages,
   getXiaojiSessions,
   type AiChatMessage,
   type AiChatSession,
 } from '../api/logs'
+import { streamFetch } from '../api/stream'
 
 const sessions = ref<AiChatSession[]>([])
 const messages = ref<AiChatMessage[]>([])
@@ -73,13 +74,28 @@ const sendMessage = async () => {
   messages.value.push({ id: Date.now(), role: 'user', content: message, createdAt: '' })
   chatInput.value = ''
   sending.value = true
+
+  // 占位 assistant 消息，流式 chunk 追加到这里
+  const placeholder: AiChatMessage = { id: Date.now() + 1, role: 'assistant', content: '', createdAt: '' }
+  messages.value.push(placeholder)
   await scrollChatToBottom()
 
   try {
-    const { data } = await chatWithXiaoji(message, activeSessionId.value)
-    activeSessionId.value = data.sessionId
-    messages.value = data.messages
+    await streamFetch(
+      '/xiaoji/chat/stream',
+      { message, sessionId: activeSessionId.value ?? null },
+      (chunk) => {
+        placeholder.content += chunk
+        scrollChatToBottom()
+      },
+      (sessionId) => {
+        activeSessionId.value = sessionId
+      },
+    )
     await loadSessions()
+  } catch {
+    placeholder.content = placeholder.content || '小记暂时没有回应，请稍后再试。'
+    ElMessage.error('AI 服务暂时不可用，日志仍可正常记录')
   } finally {
     sending.value = false
     await scrollChatToBottom()

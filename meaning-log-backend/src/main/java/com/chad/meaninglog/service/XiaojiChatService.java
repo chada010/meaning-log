@@ -176,6 +176,35 @@ public class XiaojiChatService {
         );
     }
 
+    /**
+     * 流式版本：保存用户消息后立即返回 sessionId，
+     * 由 Controller 层负责驱动 SSE 流推送 AI 回复，
+     * 流结束后调用 persistStreamReply 写入 AI 消息。
+     */
+    @Transactional
+    public AiChatSession prepareCompanionStream(UserAccount user, Long sessionId, String userMessage) {
+        aiRateLimiter.check(user);
+        AiChatSession session = sessionId == null
+                ? createGeneralSession(user, userMessage)
+                : getSession(user, sessionId);
+
+        if (session.getType() != AiChatSession.Type.GENERAL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This session is not a general chat");
+        }
+
+        saveMessage(session, AiChatMessage.Role.USER, userMessage);
+        return session;
+    }
+
+    @Transactional
+    public void persistStreamReply(AiChatSession session, String reply) {
+        saveMessage(session, AiChatMessage.Role.ASSISTANT, reply);
+    }
+
+    public List<OpenAiClient.ChatTurn> buildCompanionHistory(AiChatSession session) {
+        return recentTurns(session);
+    }
+
     private AiChatSession getSession(UserAccount user, Long sessionId) {
         return sessionRepository.findByIdAndUser(sessionId, user)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat session not found"));

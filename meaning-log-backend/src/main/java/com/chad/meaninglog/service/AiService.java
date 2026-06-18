@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Service
@@ -61,6 +62,15 @@ public class AiService {
 
     public String chatWithCompanion(List<OpenAiClient.ChatTurn> history, String message) {
         return openAiClient.chatWithCompanion(history, message);
+    }
+
+    public void streamChatWithCompanion(
+            List<OpenAiClient.ChatTurn> history,
+            String message,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        openAiClient.streamChatWithCompanion(history, message, onChunk, onComplete);
     }
 
     public AiReportResponse summarizeLogs(String title, String period, List<MeaningLog> logs) {
