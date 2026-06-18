@@ -59,8 +59,11 @@ public class XiaojiChatController {
     @PostMapping(value = "/chat/stream", produces = "text/event-stream")
     public SseEmitter chatStream(
             @AuthenticationPrincipal UserAccount user,
-            @Valid @RequestBody AiChatRequest request
+            @Valid @RequestBody AiChatRequest request,
+            jakarta.servlet.http.HttpServletResponse response
     ) {
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
         SseEmitter emitter = new SseEmitter(120_000L);
         AiChatSession session = xiaojiChatService.prepareCompanionStream(
                 user, request.getSessionId(), request.getMessage());

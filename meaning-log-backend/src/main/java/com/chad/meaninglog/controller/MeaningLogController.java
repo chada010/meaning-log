@@ -146,8 +146,11 @@ public class MeaningLogController {
     @PostMapping(value = "/{id}/ai/stream", produces = "text/event-stream")
     public SseEmitter generateAiForLogStream(
             @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long id
+            @PathVariable Long id,
+            jakarta.servlet.http.HttpServletResponse response
     ) {
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
         SseEmitter emitter = new SseEmitter(120_000L);
         MeaningLogService.AnalyzeStreamContext ctx = meaningLogService.prepareAnalyzeStream(user, id);
 
@@ -275,8 +278,11 @@ public class MeaningLogController {
     public SseEmitter chatStreamForLog(
             @AuthenticationPrincipal UserAccount user,
             @PathVariable Long id,
-            @Valid @RequestBody AiChatRequest request
+            @Valid @RequestBody AiChatRequest request,
+            jakarta.servlet.http.HttpServletResponse response
     ) {
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
         SseEmitter emitter = new SseEmitter(120_000L);
         XiaojiChatService.LogRefineStreamContext ctx =
                 xiaojiChatService.prepareLogRefineStream(user, id, request.getMessage());
@@ -317,8 +323,11 @@ public class MeaningLogController {
     public SseEmitter chatStreamForReport(
             @AuthenticationPrincipal UserAccount user,
             @PathVariable Long reportId,
-            @Valid @RequestBody AiChatRequest request
+            @Valid @RequestBody AiChatRequest request,
+            jakarta.servlet.http.HttpServletResponse response
     ) {
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
         SseEmitter emitter = new SseEmitter(120_000L);
         XiaojiChatService.ReportRefineStreamContext ctx =
                 xiaojiChatService.prepareReportRefineStream(user, reportId, request.getMessage());
