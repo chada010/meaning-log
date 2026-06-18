@@ -423,61 +423,96 @@ onMounted(async () => {
       <el-button @click="resetDate">清空</el-button>
     </div>
 
-    <el-table
-      v-loading="loading"
-      class="journal-table"
-      :data="logs"
-      empty-text="还没有日志，先写下一件小小的好事吧。"
-      @row-dblclick="handleRowDblClick"
-    >
-      <el-table-column label="日志" min-width="360">
-        <template #default="{ row }">
-          <div class="journal-title-cell">
-            <div class="journal-title-line">
-              <button type="button" @click="goDetail(row.id)">{{ row.title }}</button>
-              <el-tag v-if="row.favorite" type="warning" effect="light">收藏</el-tag>
+    <div class="desktop-only">
+      <el-table
+        v-loading="loading"
+        class="journal-table"
+        :data="logs"
+        empty-text="还没有日志，先写下一件小小的好事吧。"
+        @row-dblclick="handleRowDblClick"
+      >
+        <el-table-column label="日志" min-width="360">
+          <template #default="{ row }">
+            <div class="journal-title-cell">
+              <div class="journal-title-line">
+                <button type="button" @click="goDetail(row.id)">{{ row.title }}</button>
+                <el-tag v-if="row.favorite" type="warning" effect="light">收藏</el-tag>
+              </div>
+              <p>{{ previewContent(row.content) }}</p>
+              <div class="journal-row-meta">
+                <span>{{ row.logDate }}</span>
+                <span v-if="row.mood">{{ row.mood }}</span>
+                <span v-if="row.images?.length">{{ row.images.length }} 张图片</span>
+              </div>
             </div>
-            <p>{{ previewContent(row.content) }}</p>
-            <div class="journal-row-meta">
-              <span>{{ row.logDate }}</span>
-              <span v-if="row.mood">{{ row.mood }}</span>
-              <span v-if="row.images?.length">{{ row.images.length }} 张图片</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="AI 标签" min-width="170">
+          <template #default="{ row }">
+            <div v-if="splitTags(row.aiTags).length" class="compact-tag-row">
+              <el-tag v-for="tag in splitTags(row.aiTags).slice(0, 3)" :key="tag" effect="light">{{ tag }}</el-tag>
             </div>
-          </div>
-        </template>
-      </el-table-column>
-      <el-table-column label="AI 标签" min-width="170">
-        <template #default="{ row }">
-          <div v-if="splitTags(row.aiTags).length" class="compact-tag-row">
-            <el-tag v-for="tag in splitTags(row.aiTags).slice(0, 3)" :key="tag" effect="light">{{ tag }}</el-tag>
-          </div>
-          <span v-else class="muted">待整理</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="updatedAt" label="更新" width="150">
-        <template #default="{ row }">
-          <span class="muted">{{ formatTime(row.updatedAt) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="245" fixed="right">
-        <template #default="{ row }">
-          <div class="table-actions">
-            <el-button
+            <span v-else class="muted">待整理</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="updatedAt" label="更新" width="150">
+          <template #default="{ row }">
+            <span class="muted">{{ formatTime(row.updatedAt) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="245" fixed="right">
+          <template #default="{ row }">
+            <div class="table-actions">
+              <el-button
+                size="small"
+                text
+                :title="row.favorite ? '取消收藏' : '收藏'"
+                :icon="Star"
+                :type="row.favorite ? 'warning' : 'default'"
+                @click="toggleFavorite(row)"
+              />
+              <el-button size="small" text :icon="View" @click="goDetail(row.id)">详情</el-button>
+              <el-button size="small" text type="primary" :icon="ChatDotRound" @click="openChat(row)">小记</el-button>
+              <el-button size="small" text :icon="Edit" @click="goEdit(row.id)">编辑</el-button>
+              <el-button size="small" text title="删除" type="danger" :icon="Delete" @click="handleDelete(row)" />
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <div v-if="!loading" class="mobile-only log-card-list">
+      <p v-if="!logs.length" class="log-card-empty">还没有日志，先写下一件小小的好事吧。</p>
+      <div v-for="log in logs" :key="log.id" class="log-card">
+        <div class="log-card-header">
+          <span class="log-card-date">{{ log.logDate }}</span>
+          <div class="log-card-tags">
+            <el-tag v-if="log.favorite" type="warning" effect="light" size="small">收藏</el-tag>
+            <el-tag
+              v-for="tag in splitTags(log.aiTags).slice(0, 2)"
+              :key="tag"
+              effect="light"
               size="small"
-              text
-              :title="row.favorite ? '取消收藏' : '收藏'"
-              :icon="Star"
-              :type="row.favorite ? 'warning' : 'default'"
-              @click="toggleFavorite(row)"
-            />
-            <el-button size="small" text :icon="View" @click="goDetail(row.id)">详情</el-button>
-            <el-button size="small" text type="primary" :icon="ChatDotRound" @click="openChat(row)">小记</el-button>
-            <el-button size="small" text :icon="Edit" @click="goEdit(row.id)">编辑</el-button>
-            <el-button size="small" text title="删除" type="danger" :icon="Delete" @click="handleDelete(row)" />
+            >{{ tag }}</el-tag>
           </div>
-        </template>
-      </el-table-column>
-    </el-table>
+        </div>
+        <button class="log-card-title" type="button" @click="goDetail(log.id)">{{ log.title }}</button>
+        <p class="log-card-summary">{{ previewContent(log.content) }}</p>
+        <div class="log-card-actions">
+          <el-button size="small" text :icon="View" @click="goDetail(log.id)">详情</el-button>
+          <el-button size="small" text type="primary" :icon="ChatDotRound" @click="openChat(log)">小记</el-button>
+          <el-button size="small" text :icon="Edit" @click="goEdit(log.id)">编辑</el-button>
+          <el-button
+            size="small"
+            text
+            :icon="Star"
+            :type="log.favorite ? 'warning' : 'default'"
+            @click="toggleFavorite(log)"
+          />
+          <el-button size="small" text type="danger" :icon="Delete" @click="handleDelete(log)" />
+        </div>
+      </div>
+    </div>
   </section>
 
   <el-drawer v-model="chatVisible" title="小记" size="420px" append-to-body>
