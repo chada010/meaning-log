@@ -44,7 +44,7 @@ public class AuthService {
     public AuthResponse login(LoginRequest request) {
         String identifier = request.getIdentifier().trim();
         UserAccount user;
-        if (identifier.contains("@")) {
+        if (identifier.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             user = userAccountRepository.findByEmail(normalizeEmail(identifier))
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password"));
         } else {
