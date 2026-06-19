@@ -4,8 +4,10 @@ import com.chad.meaninglog.dto.AuthResponse;
 import com.chad.meaninglog.dto.LoginRequest;
 import com.chad.meaninglog.dto.RegisterRequest;
 import com.chad.meaninglog.dto.ResetPasswordRequest;
+import com.chad.meaninglog.dto.SendCodeRequest;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.service.AuthService;
+import com.chad.meaninglog.service.EmailVerificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,6 +25,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
+
+    @PostMapping("/send-code")
+    public void sendCode(@Valid @RequestBody SendCodeRequest request) {
+        emailVerificationService.sendCode(request.getEmail());
+    }
 
     @PostMapping("/register")
     public AuthResponse register(@Valid @RequestBody RegisterRequest request) {

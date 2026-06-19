@@ -11,6 +11,7 @@ export interface RegisterRequest {
   email: string
   username: string
   password: string
+  verificationCode: string
 }
 
 export interface LoginRequest {
@@ -21,6 +22,10 @@ export interface LoginRequest {
 export interface ResetPasswordRequest {
   email: string
   newPassword: string
+}
+
+export const sendVerificationCode = (email: string) => {
+  return http.post<void>('/auth/send-code', { email })
 }
 
 export const register = (data: RegisterRequest) => {

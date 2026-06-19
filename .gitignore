@@ -30,5 +30,8 @@ application-prod.properties
 .DS_Store
 Thumbs.db
 
+# ===== VSCode local secrets =====
+.vscode/launch.json
+
 # ===== Claude Code =====
 .claude/

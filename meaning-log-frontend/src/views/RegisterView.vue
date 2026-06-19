@@ -4,17 +4,21 @@ import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { useAuthStore } from '../stores/authStore'
 import { persistPendingTrial } from '../api/trial'
+import { sendVerificationCode } from '../api/auth'
 import type { RegisterRequest } from '../api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const sendingCode = ref(false)
+const countdown = ref(0)
 
 const form = reactive<RegisterRequest>({
   email: '',
   username: '',
   password: '',
+  verificationCode: '',
 })
 
 const rules: FormRules<RegisterRequest> = {
@@ -30,6 +34,30 @@ const rules: FormRules<RegisterRequest> = {
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, max: 100, message: '密码至少 6 个字符', trigger: 'blur' },
   ],
+  verificationCode: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
+}
+
+const startCountdown = () => {
+  countdown.value = 60
+  const timer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(timer)
+    }
+  }, 1000)
+}
+
+const handleSendCode = async () => {
+  // 仅校验邮箱字段
+  await formRef.value?.validateField('email')
+  sendingCode.value = true
+  try {
+    await sendVerificationCode(form.email)
+    ElMessage.success('验证码已发送，请查收邮件')
+    startCountdown()
+  } finally {
+    sendingCode.value = false
+  }
 }
 
 const submit = async () => {
@@ -60,6 +88,19 @@ const submit = async () => {
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="form.email" placeholder="you@example.com" />
+        </el-form-item>
+
+        <el-form-item label="验证码" prop="verificationCode">
+          <div style="display: flex; gap: 8px; width: 100%">
+            <el-input v-model="form.verificationCode" placeholder="6 位验证码" maxlength="6" />
+            <el-button
+              :disabled="countdown > 0"
+              :loading="sendingCode"
+              @click="handleSendCode"
+            >
+              {{ countdown > 0 ? `${countdown}s 后重发` : '发送验证码' }}
+            </el-button>
+          </div>
         </el-form-item>
 
         <el-form-item label="用户名" prop="username">

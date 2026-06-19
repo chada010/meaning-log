@@ -21,10 +21,14 @@ public class AuthService {
     private final UserAccountRepository userAccountRepository;
     private final PasswordHasher passwordHasher;
     private final JwtService jwtService;
+    private final EmailVerificationService emailVerificationService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         String email = normalizeEmail(request.getEmail());
+
+        emailVerificationService.verifyCode(email, request.getVerificationCode());
+
         if (userAccountRepository.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
         }
