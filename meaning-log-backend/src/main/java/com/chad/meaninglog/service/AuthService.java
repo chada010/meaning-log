@@ -42,11 +42,18 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        UserAccount user = userAccountRepository.findByEmail(normalizeEmail(request.getEmail()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+        String identifier = request.getIdentifier().trim();
+        UserAccount user;
+        if (identifier.contains("@")) {
+            user = userAccountRepository.findByEmail(normalizeEmail(identifier))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password"));
+        } else {
+            user = userAccountRepository.findByUsername(identifier)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password"));
+        }
 
         if (!passwordHasher.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password");
         }
 
         return createAuthResponse(user);

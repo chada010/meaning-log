@@ -20,6 +20,10 @@ public interface UserAccountRepository extends BaseMapper<UserAccount> {
         return Optional.ofNullable(selectOne(new LambdaQueryWrapper<UserAccount>().eq(UserAccount::getEmail, email)));
     }
 
+    default Optional<UserAccount> findByUsername(String username) {
+        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<UserAccount>().eq(UserAccount::getUsername, username)));
+    }
+
     default UserAccount save(UserAccount user) {
         if (user.getId() == null) {
             insert(user);
