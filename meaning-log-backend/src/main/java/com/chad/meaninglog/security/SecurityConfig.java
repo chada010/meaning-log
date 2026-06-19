@@ -40,7 +40,7 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(authenticationEntryPoint()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/reset-password").permitAll()
+                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/reset-password", "/api/auth/send-code").permitAll()
                         .requestMatchers("/api/trial/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
