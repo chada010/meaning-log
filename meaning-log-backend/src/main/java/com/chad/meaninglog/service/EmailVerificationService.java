@@ -41,10 +41,11 @@ public class EmailVerificationService {
         }
 
         String code = generateCode();
+        sendEmail(email, code);
+
+        // 邮件发送成功后再写入 Redis，避免发送失败时 cooldown 锁住用户
         redisTemplate.opsForValue().set(CODE_KEY_PREFIX + email, code, Duration.ofSeconds(codeTtlSeconds));
         redisTemplate.opsForValue().set(cooldownKey, "1", Duration.ofSeconds(cooldownSeconds));
-
-        sendEmail(email, code);
     }
 
     /**
