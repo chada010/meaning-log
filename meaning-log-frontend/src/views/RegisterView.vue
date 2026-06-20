@@ -14,14 +14,15 @@ const submitting = ref(false)
 const sendingCode = ref(false)
 const countdown = ref(0)
 
-const form = reactive<RegisterRequest>({
+const form = reactive<RegisterRequest & { confirmPassword: string }>({
   email: '',
   username: '',
   password: '',
   verificationCode: '',
+  confirmPassword: '',
 })
 
-const rules: FormRules<RegisterRequest> = {
+const rules = {
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
@@ -33,6 +34,19 @@ const rules: FormRules<RegisterRequest> = {
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, max: 100, message: '密码至少 6 个字符', trigger: 'blur' },
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入密码', trigger: 'blur' },
+    {
+      validator: (_rule: unknown, value: string, callback: (e?: Error) => void) => {
+        if (value !== form.password) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur',
+    },
   ],
   verificationCode: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
 }
@@ -64,7 +78,8 @@ const submit = async () => {
   await formRef.value?.validate()
   submitting.value = true
   try {
-    await authStore.register(form)
+    const { confirmPassword: _confirm, ...registerData } = form
+    await authStore.register(registerData)
     const newLogId = await persistPendingTrial()
     ElMessage.success(newLogId ? '已经替你把第一条小记收好了' : '注册成功')
     router.push(newLogId ? { name: 'log-detail', params: { id: newLogId } } : { name: 'home' })
@@ -109,6 +124,10 @@ const submit = async () => {
 
         <el-form-item label="密码" prop="password">
           <el-input v-model="form.password" type="password" show-password placeholder="至少 6 个字符" />
+        </el-form-item>
+
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input v-model="form.confirmPassword" type="password" show-password placeholder="再次输入密码" />
         </el-form-item>
 
         <el-button class="auth-submit" type="primary" :loading="submitting" @click="submit">注册并登录</el-button>
