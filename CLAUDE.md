@@ -51,11 +51,11 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 | `security/` | 无状态 JWT，通过 `JwtAuthenticationFilter` 实现。`UserAccount` 实现 `UserDetails`。 |
 | `dto/` | 请求/响应对象，与 Entity 分离，响应 DTO 用静态 `from(entity)` 方法转换。 |
 
-**无需 JWT 的公开接口**：`/api/auth/**`、`/api/trial/**`
+**无需 JWT 的公开接口**：`/api/auth/register`、`/api/auth/login`、`/api/auth/reset-password`、`/api/auth/send-code`、`/api/trial/**`
 
 **AI 服务商**：阿里云 DashScope（Qwen），通过 `ai.*` 配置项注入。客户端向 `${ai.base-url}/chat/completions` 发送 OpenAI 格式请求。所有提示词以静态常量形式定义在 `OpenAiClient` 中。
 
-**Redis** 仅用于 AI 限流（`AiRateLimiter`），不做 Session 或缓存。
+**Redis** 用于 AI 限流（`AiRateLimiter`）和邮箱验证码存储（`EmailVerificationService`），不做 Session 或缓存。
 
 **图片** 以二进制 Blob 存储在 `log_image` 表中（`LogImage.data` 字段），不使用对象存储。
 
@@ -94,10 +94,25 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 | `JWT_SECRET` | 开发占位符 | 生产环境必须替换 |
 | `AI_RATE_LIMIT_MAX_REQUESTS` | `5` | 每个 IP 每窗口期最大请求数 |
 | `AI_RATE_LIMIT_WINDOW_SECONDS` | `60` | 限流时间窗口（秒） |
+| `MAIL_HOST` | `smtp.qq.com` | SMTP 服务器。Railway 封锁标准 465/587 端口，生产环境使用 Resend（`smtp.resend.com`）并将端口设为 `2465` |
+| `MAIL_PORT` | `465` | SMTP 端口。Resend 备用端口为 `2465` |
+| `MAIL_USERNAME` | — | SMTP 用户名。Resend 固定填 `resend` |
+| `MAIL_PASSWORD` | — | SMTP 密码 / API Key |
+| `MAIL_FROM` | — | 发件人地址，须与已验证域名匹配 |
+| `EMAIL_CODE_TTL` | `300` | 验证码有效期（秒） |
+| `EMAIL_CODE_COOLDOWN` | `60` | 同一邮箱重新发送冷却时间（秒） |
+
+### 登录方式
+
+登录接口（`POST /api/auth/login`）接收 `identifier` 字段，支持邮箱或用户名两种方式：用正则 `^[^@\s]+@[^@\s]+\.[^@\s]+$` 判断是否为邮箱，分别走 `findByEmail` 或 `findByUsername` 查询。
+
+### 邮箱验证码
+
+注册前须先调用 `POST /api/auth/send-code` 获取 6 位验证码（TTL 5 分钟，同一邮箱 60 秒冷却）。验证码用 Redis 存储，key 为 `email:verify:code:<email>`；冷却 key 为 `email:verify:cooldown:<email>`。`AuthService.register()` 在写库前调用 `EmailVerificationService.verifyCode()` 校验，通过后立即删除 Redis key 防止重用。
 
 ### CORS
 
-后端 CORS 在 `SecurityConfig` 中硬编码为 `http://localhost:5173`。部署时需修改 `SecurityConfig.corsConfigurationSource()`。
+后端 CORS 在 `SecurityConfig` 中硬编码允许 `localhost:5173` 及生产域名。部署时需修改 `SecurityConfig.corsConfigurationSource()`。
 
 ## AI 功能设计
 
