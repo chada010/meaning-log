@@ -14,6 +14,7 @@ import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.service.AiService;
 import com.chad.meaninglog.service.MeaningLogService;
 import com.chad.meaninglog.service.XiaojiChatService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -48,6 +49,7 @@ public class MeaningLogController {
     private final XiaojiChatService xiaojiChatService;
     private final AiService aiService;
     private final ExecutorService sseExecutorService;
+    private final ObjectMapper objectMapper;
 
     @GetMapping
     public List<MeaningLogResponse> findAll(
@@ -355,6 +357,108 @@ public class MeaningLogController {
                             try {
                                 xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
                                 emitter.send(SseEmitter.event().name("done").data(""));
+                                emitter.complete();
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        }
+                );
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
+    }
+
+    record ReportStreamRequest(LocalDate startDate, LocalDate endDate, String title) {
+        String resolvedTitle() { return title == null || title.isBlank() ? "AI 报告" : title; }
+    }
+
+    record DailySummaryStreamRequest(LocalDate date) {}
+
+    @PostMapping(value = "/ai/report/stream", produces = "text/event-stream")
+    public SseEmitter generateReportStream(
+            @AuthenticationPrincipal UserAccount user,
+            @RequestBody ReportStreamRequest request,
+            jakarta.servlet.http.HttpServletResponse response
+    ) {
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
+        MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareReportStream(
+                user, request.startDate(), request.endDate(), request.resolvedTitle());
+
+        SseEmitter emitter = new SseEmitter(120_000L);
+        StringBuilder buffer = new StringBuilder();
+
+        sseExecutorService.submit(() -> {
+            try {
+                aiService.streamSummarizeLogs(
+                        request.resolvedTitle(), ctx.period(), ctx.logs(),
+                        chunk -> {
+                            try {
+                                buffer.append(chunk);
+                                emitter.send(SseEmitter.event().data(chunk));
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        },
+                        () -> {
+                            try {
+                                AiReportResponse aiResponse = objectMapper.readValue(
+                                        buffer.toString(), AiReportResponse.class);
+                                AiReportResponse saved = meaningLogService.saveReport(
+                                        user, ctx.type(), ctx.startDate(), ctx.endDate(), aiResponse);
+                                emitter.send(SseEmitter.event().name("done")
+                                        .data(objectMapper.writeValueAsString(saved)));
+                                emitter.complete();
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        }
+                );
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
+    }
+
+    @PostMapping(value = "/ai/daily-summary/stream", produces = "text/event-stream")
+    public SseEmitter generateDailySummaryStream(
+            @AuthenticationPrincipal UserAccount user,
+            @RequestBody DailySummaryStreamRequest request,
+            jakarta.servlet.http.HttpServletResponse response
+    ) {
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
+        MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareDailySummaryStream(
+                user, request.date());
+
+        SseEmitter emitter = new SseEmitter(120_000L);
+        StringBuilder buffer = new StringBuilder();
+
+        sseExecutorService.submit(() -> {
+            try {
+                aiService.streamSummarizeLogs(
+                        "AI 当天总结", ctx.period(), ctx.logs(),
+                        chunk -> {
+                            try {
+                                buffer.append(chunk);
+                                emitter.send(SseEmitter.event().data(chunk));
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        },
+                        () -> {
+                            try {
+                                AiReportResponse aiResponse = objectMapper.readValue(
+                                        buffer.toString(), AiReportResponse.class);
+                                AiReportResponse saved = meaningLogService.saveReport(
+                                        user, ctx.type(), ctx.startDate(), ctx.endDate(), aiResponse);
+                                emitter.send(SseEmitter.event().name("done")
+                                        .data(objectMapper.writeValueAsString(saved)));
                                 emitter.complete();
                             } catch (Exception e) {
                                 emitter.completeWithError(e);

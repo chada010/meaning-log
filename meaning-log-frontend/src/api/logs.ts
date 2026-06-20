@@ -183,6 +183,16 @@ export const chatWithLogAiStream = (id: number, message: string, onChunk?: (chun
 export const chatWithAiReportStream = (id: number, message: string, onChunk?: (chunk: string) => void) =>
   streamFetchJson<AiReport>(`/logs/ai/reports/${id}/chat/stream`, { message }, onChunk)
 
+export const generateAiReportStream = (
+  startDate: string,
+  endDate: string,
+  title: string,
+  onChunk?: (chunk: string) => void,
+) => streamFetchJson<AiReport>('/logs/ai/report/stream', { startDate, endDate, title }, onChunk)
+
+export const generateDailySummaryStream = (date: string, onChunk?: (chunk: string) => void) =>
+  streamFetchJson<AiReport>('/logs/ai/daily-summary/stream', { date }, onChunk)
+
 export const getXiaojiSessions = () => {
   return http.get<AiChatSession[]>('/xiaoji/sessions')
 }

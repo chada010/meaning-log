@@ -55,6 +55,9 @@ export async function streamFetchJson<T>(
         if (!data) continue
 
         if (currentEvent === 'done') {
+          if (data && data.trim() !== '') {
+            return JSON.parse(data) as T
+          }
           return JSON.parse(stripMarkdownFence(accumulated)) as T
         } else {
           accumulated += data

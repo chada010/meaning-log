@@ -1,4 +1,5 @@
 import http from './http'
+import { streamFetchJson } from './stream'
 import { applyLogAi, createLog, type AiSuggestion, type MeaningLogRequest } from './logs'
 
 export interface TrialAiResult {
@@ -18,6 +19,9 @@ const trialDraftKey = 'meaning-log-trial-draft'
 export const analyzeTrialLog = (data: MeaningLogRequest) => {
   return http.post<TrialAiResult>('/trial/analyze', data)
 }
+
+export const analyzeTrialLogStream = (data: MeaningLogRequest, onChunk?: (chunk: string) => void) =>
+  streamFetchJson<TrialAiResult>('/trial/analyze/stream', data, onChunk)
 
 export const savePendingTrial = (pending: PendingTrial) => {
   localStorage.setItem(pendingKey, JSON.stringify(pending))

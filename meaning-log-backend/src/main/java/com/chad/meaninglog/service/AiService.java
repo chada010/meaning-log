@@ -100,6 +100,22 @@ public class AiService {
         return openAiClient.summarizeReport(title, period, logsText);
     }
 
+    public void streamSummarizeLogs(
+            String title,
+            String period,
+            List<MeaningLog> logs,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        String logsText = logs.isEmpty()
+                ? "这段时间没有日志记录。"
+                : logs.stream()
+                .map(this::formatLog)
+                .collect(Collectors.joining("\n\n"));
+
+        openAiClient.streamSummarizeReport(title, period, logsText, onChunk, onComplete);
+    }
+
     public void streamRefineLogSummary(
             MeaningLog log,
             List<OpenAiClient.ChatTurn> history,

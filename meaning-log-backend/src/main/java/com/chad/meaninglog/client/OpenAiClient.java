@@ -261,6 +261,43 @@ public class OpenAiClient {
         return readJson(contentText, AiReportResponse.class);
     }
 
+    public void streamSummarizeReport(
+            String title,
+            String period,
+            String logsText,
+            Consumer<String> onChunk,
+            Runnable onComplete
+    ) {
+        String focus = reportFocus(title);
+        String userPrompt = """
+                请根据下面一组日志生成一份温柔、清晰、像朋友陪伴复盘一样的中文报告。
+
+                输出 JSON 格式必须是：
+                {"title":"报告标题","period":"时间范围","summary":"报告正文","tags":"标签1,标签2,标签3"}
+
+                字段要求：
+                - title：保留或优化为适合展示的报告标题。
+                - period：使用给定时间范围。
+                - summary：220 到 650 个汉字，分成自然段也可以，但仍然必须放在 JSON 字符串里。
+                - tags：用英文逗号分隔，3 到 8 个中文标签。
+                - 重点方向：%s
+                - 必须从多篇日志里提炼重复出现的感受、事件类型、在意点或生活节奏。
+                - 可以温柔地提出一个很小、可执行的观察或提醒，但不要说教。
+                - 如果日志不足，也要诚实说明"样本还少"，不要编造趋势。
+
+                报告标题：%s
+                时间范围：%s
+                日志内容：
+                %s
+                """.formatted(focus, title, period, logsText);
+
+        List<Map<String, Object>> messages = List.of(
+                Map.of("role", "system", "content", REPORT_ASSISTANT_PROMPT),
+                Map.of("role", "user", "content", userPrompt)
+        );
+        streamChatCompletion(messages, 1200, 0.7, onChunk, onComplete);
+    }
+
     private String reportFocus(String title) {
         String value = title == null ? "" : title;
         if (value.contains("情绪")) {

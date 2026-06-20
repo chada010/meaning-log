@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.List;
+import java.util.concurrent.ExecutorService;
 
 /**
  * 游客试用：未登录用户可写一条临时日志并体验一次 AI 整理。
@@ -26,6 +30,7 @@ public class PublicTrialController {
 
     private final AiService aiService;
     private final AiRateLimiter aiRateLimiter;
+    private final ExecutorService sseExecutorService;
 
     @PostMapping("/analyze")
     public LogAiResult analyze(
@@ -41,6 +46,51 @@ public class PublicTrialController {
         log.setMood(request.getMood());
 
         return aiService.analyzeLog(log);
+    }
+
+    @PostMapping(value = "/analyze/stream", produces = "text/event-stream")
+    public SseEmitter analyzeStream(
+            @Valid @RequestBody TrialAnalyzeRequest request,
+            HttpServletRequest httpRequest,
+            jakarta.servlet.http.HttpServletResponse httpResponse
+    ) {
+        httpResponse.setHeader("X-Accel-Buffering", "no");
+        httpResponse.setHeader("Cache-Control", "no-cache");
+        aiRateLimiter.checkTrial(resolveClientIp(httpRequest));
+
+        MeaningLog log = new MeaningLog();
+        log.setTitle(request.getTitle());
+        log.setContent(request.getContent());
+        log.setLogDate(request.getLogDate());
+        log.setMood(request.getMood());
+
+        SseEmitter emitter = new SseEmitter(120_000L);
+
+        sseExecutorService.submit(() -> {
+            try {
+                aiService.streamAnalyzeLog(log, List.of(),
+                        chunk -> {
+                            try {
+                                emitter.send(SseEmitter.event().data(chunk));
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        },
+                        () -> {
+                            try {
+                                emitter.send(SseEmitter.event().name("done").data(""));
+                                emitter.complete();
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        }
+                );
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
     }
 
     private String resolveClientIp(HttpServletRequest request) {

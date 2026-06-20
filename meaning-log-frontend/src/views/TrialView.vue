@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import { isAxiosError } from 'axios'
 import LogForm from '../components/LogForm.vue'
 import type { MeaningLogRequest } from '../api/logs'
-import { analyzeTrialLog, savePendingTrial, type TrialAiResult } from '../api/trial'
+import { analyzeTrialLogStream, savePendingTrial, type TrialAiResult } from '../api/trial'
 
 const router = useRouter()
 const draftKey = 'meaning-log-trial-draft'
@@ -18,11 +18,12 @@ const handleAnalyze = async (value: MeaningLogRequest) => {
   lastDraft.value = value
   analyzing.value = true
   try {
-    const { data } = await analyzeTrialLog(value)
-    aiResult.value = data
+    aiResult.value = await analyzeTrialLogStream(value)
     ElMessage.success('小记替你整理好啦，看看喜不喜欢～')
   } catch (error) {
-    if (isAxiosError(error) && error.response?.status === 429) {
+    if (error instanceof Error && error.message.includes('429')) {
+      ElMessage.warning('试用整理太频繁啦，注册后可以无限使用')
+    } else if (isAxiosError(error) && error.response?.status === 429) {
       ElMessage.warning('试用整理太频繁啦，注册后可以无限使用')
     }
     // 其余错误已由 http 拦截器统一提示

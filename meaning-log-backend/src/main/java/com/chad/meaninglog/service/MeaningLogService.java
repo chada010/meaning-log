@@ -303,7 +303,24 @@ public class MeaningLogService {
         return value.trim().toLowerCase();
     }
 
-    private AiReportResponse saveReport(
+    public record ReportStreamContext(List<MeaningLog> logs, String period, AiReport.Type type,
+                                      LocalDate startDate, LocalDate endDate) {}
+
+    public ReportStreamContext prepareReportStream(
+            UserAccount user, LocalDate startDate, LocalDate endDate, String title
+    ) {
+        aiRateLimiter.check(user);
+        List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(user, startDate, endDate);
+        return new ReportStreamContext(logs, startDate + " 至 " + endDate, inferReportType(title), startDate, endDate);
+    }
+
+    public ReportStreamContext prepareDailySummaryStream(UserAccount user, LocalDate date) {
+        aiRateLimiter.check(user);
+        List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
+        return new ReportStreamContext(logs, date.toString(), AiReport.Type.DAILY, date, date);
+    }
+
+    public AiReportResponse saveReport(
             UserAccount user,
             AiReport.Type type,
             LocalDate startDate,

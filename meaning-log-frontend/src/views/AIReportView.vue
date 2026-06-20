@@ -5,8 +5,8 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import {
   applyAiReport,
   chatWithAiReportStream,
-  generateAiReport,
-  generateDailySummary,
+  generateAiReportStream,
+  generateDailySummaryStream,
   getAiReportChat,
   getAiReports,
   type AiChatMessage,
@@ -164,12 +164,10 @@ const generate = async () => {
   loading.value = true
   try {
     if (form.mode === 'daily') {
-      const { data } = await generateDailySummary(form.date)
-      report.value = data
+      report.value = await generateDailySummaryStream(form.date)
     } else {
       const [startDate, endDate] = form.range
-      const { data } = await generateAiReport(startDate, endDate, title.value)
-      report.value = data
+      report.value = await generateAiReportStream(startDate, endDate, title.value)
     }
     previewReport.value = undefined
     lastReportSnapshot.value = undefined
