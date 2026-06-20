@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage, type FormInstance } from 'element-plus'
 import { useAuthStore } from '../stores/authStore'
 import { persistPendingTrial } from '../api/trial'
 import { sendVerificationCode } from '../api/auth'
