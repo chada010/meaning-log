@@ -1,20 +1,11 @@
 package com.chad.meaninglog.controller;
 
-import com.chad.meaninglog.dto.AiApplyRequest;
-import com.chad.meaninglog.dto.AiReportApplyRequest;
-import com.chad.meaninglog.dto.AiReportResponse;
-import com.chad.meaninglog.dto.AiChatRequest;
-import com.chad.meaninglog.dto.AiChatResponse;
-import com.chad.meaninglog.dto.LogAiResult;
 import com.chad.meaninglog.dto.LogNavigationResponse;
 import com.chad.meaninglog.dto.MeaningLogRequest;
 import com.chad.meaninglog.dto.MeaningLogResponse;
 import com.chad.meaninglog.entity.LogImage;
 import com.chad.meaninglog.entity.UserAccount;
-import com.chad.meaninglog.service.AiService;
 import com.chad.meaninglog.service.MeaningLogService;
-import com.chad.meaninglog.service.XiaojiChatService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -33,23 +24,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 
-@CrossOrigin(origins = "http://localhost:5173")
+import static com.chad.meaninglog.web.WebConstants.LOCAL_FRONTEND_ORIGIN;
+
+@CrossOrigin(origins = LOCAL_FRONTEND_ORIGIN)
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/logs")
 public class MeaningLogController {
 
     private final MeaningLogService meaningLogService;
-    private final XiaojiChatService xiaojiChatService;
-    private final AiService aiService;
-    private final ExecutorService sseExecutorService;
-    private final ObjectMapper objectMapper;
 
     @GetMapping
     public List<MeaningLogResponse> findAll(
@@ -94,13 +81,6 @@ public class MeaningLogController {
         return meaningLogService.findNavigation(user, id);
     }
 
-    @GetMapping("/ai/tags")
-    public List<String> findAiTags(
-            @AuthenticationPrincipal UserAccount user
-    ) {
-        return meaningLogService.findAiTags(user);
-    }
-
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public MeaningLogResponse create(
@@ -137,339 +117,4 @@ public class MeaningLogController {
         meaningLogService.delete(user, id);
     }
 
-    @PostMapping("/{id}/ai")
-    public MeaningLogResponse generateAiForLog(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long id
-    ) {
-        return meaningLogService.generateAiForLog(user, id);
-    }
-
-    @PostMapping(value = "/{id}/ai/stream", produces = "text/event-stream")
-    public SseEmitter generateAiForLogStream(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long id,
-            jakarta.servlet.http.HttpServletResponse response
-    ) {
-        response.setHeader("X-Accel-Buffering", "no");
-        response.setHeader("Cache-Control", "no-cache");
-        SseEmitter emitter = new SseEmitter(120_000L);
-        MeaningLogService.AnalyzeStreamContext ctx = meaningLogService.prepareAnalyzeStream(user, id);
-
-        sseExecutorService.submit(() -> {
-            try {
-                aiService.streamAnalyzeLog(ctx.log(), ctx.images(),
-                        chunk -> {
-                            try {
-                                emitter.send(SseEmitter.event().data(chunk));
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        },
-                        () -> {
-                            try {
-                                emitter.send(SseEmitter.event().name("done").data(""));
-                                emitter.complete();
-                            } catch (Exception e) {
-                                emitter.completeWithError(e);
-                            }
-                        }
-                );
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-        });
-
-        return emitter;
-    }
-
-    @PostMapping("/{id}/ai/chat")
-    public AiChatResponse previewAiForLog(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long id,
-            @Valid @RequestBody AiChatRequest request
-    ) {
-        return xiaojiChatService.chatWithLog(user, id, request.getMessage());
-    }
-
-    @GetMapping("/{id}/ai/chat")
-    public AiChatResponse findLogAiChat(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long id
-    ) {
-        return xiaojiChatService.findLogMessages(user, id);
-    }
-
-    @PostMapping("/{id}/ai/apply")
-    public MeaningLogResponse applyAiForLog(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long id,
-            @Valid @RequestBody AiApplyRequest request
-    ) {
-        LogAiResult result = new LogAiResult(request.getTitle(), request.getSummary(), request.getTags());
-        return meaningLogService.applyAiForLog(user, id, result);
-    }
-
-    @PostMapping("/ai/daily-summary")
-    public AiReportResponse summarizeDay(
-            @AuthenticationPrincipal UserAccount user,
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate date
-    ) {
-        return meaningLogService.summarizeDay(user, date);
-    }
-
-    @PostMapping("/ai/report")
-    public AiReportResponse summarizePeriod(
-            @AuthenticationPrincipal UserAccount user,
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate startDate,
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate endDate,
-            @RequestParam(defaultValue = "AI 报告")
-            String title
-    ) {
-        return meaningLogService.summarizePeriod(user, startDate, endDate, title);
-    }
-
-    @GetMapping("/ai/reports")
-    public List<AiReportResponse> findReports(
-            @AuthenticationPrincipal UserAccount user
-    ) {
-        return meaningLogService.findReports(user);
-    }
-
-    @GetMapping("/ai/reports/{reportId}")
-    public AiReportResponse findReport(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long reportId
-    ) {
-        return meaningLogService.findReport(user, reportId);
-    }
-
-    @PostMapping("/ai/reports/{reportId}/apply")
-    public AiReportResponse applyReport(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long reportId,
-            @Valid @RequestBody AiReportApplyRequest request
-    ) {
-        return meaningLogService.applyReport(user, reportId, request);
-    }
-
-    @GetMapping("/ai/reports/{reportId}/chat")
-    public AiChatResponse findReportChat(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long reportId
-    ) {
-        return xiaojiChatService.findReportMessages(user, reportId);
-    }
-
-    @PostMapping("/ai/reports/{reportId}/chat")
-    public AiChatResponse chatWithReport(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long reportId,
-            @Valid @RequestBody AiChatRequest request
-    ) {
-        return xiaojiChatService.chatWithReport(user, reportId, request.getMessage());
-    }
-
-    @PostMapping(value = "/{id}/ai/chat/stream", produces = "text/event-stream")
-    public SseEmitter chatStreamForLog(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long id,
-            @Valid @RequestBody AiChatRequest request,
-            jakarta.servlet.http.HttpServletResponse response
-    ) {
-        response.setHeader("X-Accel-Buffering", "no");
-        response.setHeader("Cache-Control", "no-cache");
-        SseEmitter emitter = new SseEmitter(120_000L);
-        XiaojiChatService.LogRefineStreamContext ctx =
-                xiaojiChatService.prepareLogRefineStream(user, id, request.getMessage());
-
-        StringBuilder buffer = new StringBuilder();
-
-        sseExecutorService.submit(() -> {
-            try {
-                aiService.streamRefineLogSummary(
-                        ctx.log(), ctx.history(), ctx.images(), request.getMessage(),
-                        chunk -> {
-                            try {
-                                buffer.append(chunk);
-                                emitter.send(SseEmitter.event().data(chunk));
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        },
-                        () -> {
-                            try {
-                                xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
-                                emitter.send(SseEmitter.event().name("done").data(""));
-                                emitter.complete();
-                            } catch (Exception e) {
-                                emitter.completeWithError(e);
-                            }
-                        }
-                );
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-        });
-
-        return emitter;
-    }
-
-    @PostMapping(value = "/ai/reports/{reportId}/chat/stream", produces = "text/event-stream")
-    public SseEmitter chatStreamForReport(
-            @AuthenticationPrincipal UserAccount user,
-            @PathVariable Long reportId,
-            @Valid @RequestBody AiChatRequest request,
-            jakarta.servlet.http.HttpServletResponse response
-    ) {
-        response.setHeader("X-Accel-Buffering", "no");
-        response.setHeader("Cache-Control", "no-cache");
-        SseEmitter emitter = new SseEmitter(120_000L);
-        XiaojiChatService.ReportRefineStreamContext ctx =
-                xiaojiChatService.prepareReportRefineStream(user, reportId, request.getMessage());
-
-        StringBuilder buffer = new StringBuilder();
-
-        sseExecutorService.submit(() -> {
-            try {
-                aiService.streamRefineReport(
-                        ctx.report().getTitle(),
-                        ctx.report().getPeriod(),
-                        ctx.report().getSummary(),
-                        ctx.report().getTags(),
-                        ctx.history(),
-                        request.getMessage(),
-                        chunk -> {
-                            try {
-                                buffer.append(chunk);
-                                emitter.send(SseEmitter.event().data(chunk));
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        },
-                        () -> {
-                            try {
-                                xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
-                                emitter.send(SseEmitter.event().name("done").data(""));
-                                emitter.complete();
-                            } catch (Exception e) {
-                                emitter.completeWithError(e);
-                            }
-                        }
-                );
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-        });
-
-        return emitter;
-    }
-
-    record ReportStreamRequest(LocalDate startDate, LocalDate endDate, String title) {
-        String resolvedTitle() { return title == null || title.isBlank() ? "AI 报告" : title; }
-    }
-
-    record DailySummaryStreamRequest(LocalDate date) {}
-
-    @PostMapping(value = "/ai/report/stream", produces = "text/event-stream")
-    public SseEmitter generateReportStream(
-            @AuthenticationPrincipal UserAccount user,
-            @RequestBody ReportStreamRequest request,
-            jakarta.servlet.http.HttpServletResponse response
-    ) {
-        response.setHeader("X-Accel-Buffering", "no");
-        response.setHeader("Cache-Control", "no-cache");
-        MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareReportStream(
-                user, request.startDate(), request.endDate(), request.resolvedTitle());
-
-        SseEmitter emitter = new SseEmitter(120_000L);
-        StringBuilder buffer = new StringBuilder();
-
-        sseExecutorService.submit(() -> {
-            try {
-                aiService.streamSummarizeLogs(
-                        request.resolvedTitle(), ctx.period(), ctx.logs(),
-                        chunk -> {
-                            try {
-                                buffer.append(chunk);
-                                emitter.send(SseEmitter.event().data(chunk));
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        },
-                        () -> {
-                            try {
-                                AiReportResponse aiResponse = objectMapper.readValue(
-                                        buffer.toString(), AiReportResponse.class);
-                                AiReportResponse saved = meaningLogService.saveReport(
-                                        user, ctx.type(), ctx.startDate(), ctx.endDate(), aiResponse);
-                                emitter.send(SseEmitter.event().name("done")
-                                        .data(objectMapper.writeValueAsString(saved)));
-                                emitter.complete();
-                            } catch (Exception e) {
-                                emitter.completeWithError(e);
-                            }
-                        }
-                );
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-        });
-
-        return emitter;
-    }
-
-    @PostMapping(value = "/ai/daily-summary/stream", produces = "text/event-stream")
-    public SseEmitter generateDailySummaryStream(
-            @AuthenticationPrincipal UserAccount user,
-            @RequestBody DailySummaryStreamRequest request,
-            jakarta.servlet.http.HttpServletResponse response
-    ) {
-        response.setHeader("X-Accel-Buffering", "no");
-        response.setHeader("Cache-Control", "no-cache");
-        MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareDailySummaryStream(
-                user, request.date());
-
-        SseEmitter emitter = new SseEmitter(120_000L);
-        StringBuilder buffer = new StringBuilder();
-
-        sseExecutorService.submit(() -> {
-            try {
-                aiService.streamSummarizeLogs(
-                        "AI 当天总结", ctx.period(), ctx.logs(),
-                        chunk -> {
-                            try {
-                                buffer.append(chunk);
-                                emitter.send(SseEmitter.event().data(chunk));
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        },
-                        () -> {
-                            try {
-                                AiReportResponse aiResponse = objectMapper.readValue(
-                                        buffer.toString(), AiReportResponse.class);
-                                AiReportResponse saved = meaningLogService.saveReport(
-                                        user, ctx.type(), ctx.startDate(), ctx.endDate(), aiResponse);
-                                emitter.send(SseEmitter.event().name("done")
-                                        .data(objectMapper.writeValueAsString(saved)));
-                                emitter.complete();
-                            } catch (Exception e) {
-                                emitter.completeWithError(e);
-                            }
-                        }
-                );
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-        });
-
-        return emitter;
-    }
 }

@@ -23,6 +23,13 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 import java.util.Map;
 
+import static com.chad.meaninglog.web.WebConstants.FREEDNS_ORIGIN;
+import static com.chad.meaninglog.web.WebConstants.FREEDNS_WWW_ORIGIN;
+import static com.chad.meaninglog.web.WebConstants.LOOPBACK_FRONTEND_ORIGIN;
+import static com.chad.meaninglog.web.WebConstants.LOCAL_FRONTEND_ORIGIN;
+import static com.chad.meaninglog.web.WebConstants.PRIMARY_VERCEL_ORIGIN;
+import static com.chad.meaninglog.web.WebConstants.VERCEL_ORIGIN_PATTERN;
+
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -53,13 +60,13 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "https://meaning-log.vercel.app",
-                "https://chada010.freeddns.org",
-                "https://www.chada010.freeddns.org"
+                LOCAL_FRONTEND_ORIGIN,
+                LOOPBACK_FRONTEND_ORIGIN,
+                PRIMARY_VERCEL_ORIGIN,
+                FREEDNS_ORIGIN,
+                FREEDNS_WWW_ORIGIN
         ));
-        configuration.setAllowedOriginPatterns(List.of("https://*.vercel.app"));
+        configuration.setAllowedOriginPatterns(List.of(VERCEL_ORIGIN_PATTERN));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE));
         configuration.setExposedHeaders(List.of(HttpHeaders.AUTHORIZATION));

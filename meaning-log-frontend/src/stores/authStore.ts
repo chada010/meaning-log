@@ -9,19 +9,17 @@ import {
   type RegisterRequest,
   type ResetPasswordRequest,
 } from '../api/auth'
-
-const tokenKey = 'meaning-log-token'
-const userKey = 'meaning-log-user'
+import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from '../constants/app'
 
 const loadUser = (): AuthUser | null => {
-  const raw = localStorage.getItem(userKey)
+  const raw = localStorage.getItem(AUTH_USER_KEY)
   return raw ? (JSON.parse(raw) as AuthUser) : null
 }
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: loadUser(),
-    token: localStorage.getItem(tokenKey),
+    token: localStorage.getItem(AUTH_TOKEN_KEY),
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
@@ -30,8 +28,8 @@ export const useAuthStore = defineStore('auth', {
     saveSession(user: AuthUser) {
       this.user = user
       this.token = user.token
-      localStorage.setItem(tokenKey, user.token)
-      localStorage.setItem(userKey, JSON.stringify(user))
+      localStorage.setItem(AUTH_TOKEN_KEY, user.token)
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
     },
     async register(data: RegisterRequest) {
       const response = await register(data)
@@ -56,8 +54,8 @@ export const useAuthStore = defineStore('auth', {
     logout() {
       this.user = null
       this.token = null
-      localStorage.removeItem(tokenKey)
-      localStorage.removeItem(userKey)
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+      localStorage.removeItem(AUTH_USER_KEY)
     },
   },
 })

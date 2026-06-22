@@ -1,18 +1,22 @@
 import axios, { type AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
-
-const SERVICE_UNAVAILABLE_MESSAGE = '服务暂时不可用，请稍后再试'
-const INVALID_LOGIN_MESSAGE = '邮箱或密码不正确'
-const AI_UNAVAILABLE_MESSAGE = 'AI 服务暂时不可用，日志仍可正常记录'
-const SESSION_EXPIRED_MESSAGE = '登录状态已过期，请重新登录'
-const tokenKey = 'meaning-log-token'
-const userKey = 'meaning-log-user'
+import {
+  AI_UNAVAILABLE_MESSAGE,
+  API_TIMEOUT_MS,
+  AUTH_TOKEN_KEY,
+  AUTH_USER_KEY,
+  INVALID_LOGIN_MESSAGE,
+  LOGIN_REDIRECT_QUERY_KEY,
+  SERVICE_UNAVAILABLE_MESSAGE,
+  SESSION_EXPIRED_MESSAGE,
+  SESSION_EXPIRED_RESET_DELAY_MS,
+} from '../constants/app'
 
 let sessionExpiredNotified = false
 
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api',
-  timeout: 30000,
+  timeout: API_TIMEOUT_MS,
 })
 
 const getRequestPath = (error: AxiosError) => {
@@ -61,20 +65,20 @@ const isAiDependencyError = (error: AxiosError, responseMessage?: string) => {
 }
 
 const redirectToLogin = (path: string) => {
-  localStorage.removeItem(tokenKey)
-  localStorage.removeItem(userKey)
+  localStorage.removeItem(AUTH_TOKEN_KEY)
+  localStorage.removeItem(AUTH_USER_KEY)
 
   if (window.location.pathname === '/login') {
     return
   }
 
   const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
-  window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
+  window.location.assign(`/login?${LOGIN_REDIRECT_QUERY_KEY}=${encodeURIComponent(redirect)}`)
 
   if (path) {
     window.setTimeout(() => {
       sessionExpiredNotified = false
-    }, 1000)
+    }, SESSION_EXPIRED_RESET_DELAY_MS)
   }
 }
 
@@ -107,7 +111,7 @@ const getFriendlyErrorMessage = (error: unknown) => {
 }
 
 http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('meaning-log-token')
+  const token = localStorage.getItem(AUTH_TOKEN_KEY)
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`

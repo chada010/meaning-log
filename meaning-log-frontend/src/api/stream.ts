@@ -1,3 +1,5 @@
+import { AUTH_TOKEN_KEY } from '../constants/app'
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 
 function stripMarkdownFence(text: string): string {
@@ -10,15 +12,15 @@ function stripMarkdownFence(text: string): string {
 }
 
 /**
- * 流式请求，累积所有 chunk，done 事件触发后 JSON.parse 并返回结果。
- * 适用于 refine 类接口——AI 输出是 JSON，需要完整接收后才能解析。
+ * 流式请求，累计所有 chunk，done 事件触发后 JSON.parse 并返回结果。
+ * 适用于 refine 类接口，AI 输出是 JSON，需要完整接收后才能解析。
  */
 export async function streamFetchJson<T>(
   path: string,
   body: unknown,
   onChunk?: (chunk: string) => void,
 ): Promise<T> {
-  const token = localStorage.getItem('meaning-log-token')
+  const token = localStorage.getItem(AUTH_TOKEN_KEY)
 
   const response = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
@@ -70,7 +72,6 @@ export async function streamFetchJson<T>(
     }
   }
 
-  // 如果 reader 提前结束（理论上不应发生），尝试解析已积累内容
   return JSON.parse(stripMarkdownFence(accumulated)) as T
 }
 
@@ -80,7 +81,7 @@ export async function streamFetch(
   onChunk: (chunk: string) => void,
   onSessionId?: (sessionId: number) => void,
 ): Promise<void> {
-  const token = localStorage.getItem('meaning-log-token')
+  const token = localStorage.getItem(AUTH_TOKEN_KEY)
 
   const response = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
@@ -121,7 +122,9 @@ export async function streamFetch(
           try {
             const parsed = JSON.parse(data)
             if (parsed.sessionId !== undefined) onSessionId?.(parsed.sessionId)
-          } catch { /* ignore */ }
+          } catch {
+            // Ignore malformed session payloads and keep the stream alive.
+          }
         } else {
           onChunk(data)
         }

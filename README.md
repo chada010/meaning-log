@@ -55,3 +55,19 @@ cd meaning-log-frontend
 npm install && npm run dev
 # 访问 http://localhost:5173
 ```
+
+## 验证命令
+
+```bash
+# 前端类型检查
+cd meaning-log-frontend
+npm run type-check
+
+# 前端构建
+cd meaning-log-frontend
+npm run build
+
+# 后端测试
+cd meaning-log-backend
+./mvnw test
+```

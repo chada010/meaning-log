@@ -6,9 +6,10 @@ import { isAxiosError } from 'axios'
 import LogForm from '../components/LogForm.vue'
 import type { MeaningLogRequest } from '../api/logs'
 import { analyzeTrialLogStream, savePendingTrial, type TrialAiResult } from '../api/trial'
+import { TRIAL_DRAFT_STORAGE_KEY } from '../constants/app'
 
 const router = useRouter()
-const draftKey = 'meaning-log-trial-draft'
+const draftKey = TRIAL_DRAFT_STORAGE_KEY
 
 const analyzing = ref(false)
 const aiResult = ref<TrialAiResult>()

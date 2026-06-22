@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getLogDetail, updateLog, type MeaningLog, type MeaningLogRequest } from '../api/logs'
 import LogForm from '../components/LogForm.vue'
+import { getEditLogDraftStorageKey } from '../constants/app'
 
 const props = defineProps<{
   id: number
@@ -43,7 +44,7 @@ const handleSubmit = async (value: MeaningLogRequest) => {
   submitting.value = true
   try {
     await updateLog(props.id, value)
-    localStorage.removeItem(`meaning-log-draft-edit-${props.id}`)
+    localStorage.removeItem(getEditLogDraftStorageKey(props.id))
     ElMessage.success('改动已经轻轻放回去了')
     router.push({ name: 'log-detail', params: { id: props.id } })
   } finally {
@@ -68,7 +69,7 @@ onMounted(loadDetail)
     <LogForm
       v-if="initialValue"
       :initial-value="initialValue"
-      :draft-key="`meaning-log-draft-edit-${props.id}`"
+      :draft-key="getEditLogDraftStorageKey(props.id)"
       :submitting="submitting"
       @submit="handleSubmit"
       @cancel="$router.back()"

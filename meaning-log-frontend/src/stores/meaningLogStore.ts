@@ -1,10 +1,9 @@
 import { defineStore } from 'pinia'
+import { MEANING_LOG_ITEMS_STORAGE_KEY } from '../constants/app'
 import type { MeaningLog, MeaningLogForm } from '../types/meaningLog'
 
-const storageKey = 'meaning-log-items'
-
 const loadLogs = (): MeaningLog[] => {
-  const raw = localStorage.getItem(storageKey)
+  const raw = localStorage.getItem(MEANING_LOG_ITEMS_STORAGE_KEY)
 
   if (!raw) {
     return []
@@ -18,7 +17,7 @@ const loadLogs = (): MeaningLog[] => {
 }
 
 const saveLogs = (logs: MeaningLog[]) => {
-  localStorage.setItem(storageKey, JSON.stringify(logs))
+  localStorage.setItem(MEANING_LOG_ITEMS_STORAGE_KEY, JSON.stringify(logs))
 }
 
 export const useMeaningLogStore = defineStore('meaningLog', {

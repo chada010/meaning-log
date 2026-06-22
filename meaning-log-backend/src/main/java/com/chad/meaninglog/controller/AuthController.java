@@ -18,7 +18,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
+import static com.chad.meaninglog.web.WebConstants.LOOPBACK_FRONTEND_ORIGIN;
+import static com.chad.meaninglog.web.WebConstants.LOCAL_FRONTEND_ORIGIN;
+
+@CrossOrigin(origins = {LOCAL_FRONTEND_ORIGIN, LOOPBACK_FRONTEND_ORIGIN})
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/auth")

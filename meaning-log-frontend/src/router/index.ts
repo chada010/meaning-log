@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { AUTH_TOKEN_KEY, LOGIN_REDIRECT_QUERY_KEY } from '../constants/app'
 import HomeView from '../views/HomeView.vue'
 
 const router = createRouter({
@@ -69,10 +70,10 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  const hasToken = Boolean(localStorage.getItem('meaning-log-token'))
+  const hasToken = Boolean(localStorage.getItem(AUTH_TOKEN_KEY))
 
   if (to.meta.requiresAuth && !hasToken) {
-    return { name: 'login', query: { redirect: to.fullPath } }
+    return { name: 'login', query: { [LOGIN_REDIRECT_QUERY_KEY]: to.fullPath } }
   }
 
   if (to.meta.guestOnly && hasToken) {

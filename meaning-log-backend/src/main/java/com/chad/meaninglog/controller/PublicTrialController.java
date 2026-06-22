@@ -5,6 +5,7 @@ import com.chad.meaninglog.dto.TrialAnalyzeRequest;
 import com.chad.meaninglog.entity.MeaningLog;
 import com.chad.meaninglog.service.AiRateLimiter;
 import com.chad.meaninglog.service.AiService;
+import com.chad.meaninglog.web.SseEmitterSupport;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,13 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
+
+import static com.chad.meaninglog.web.WebConstants.LOCAL_FRONTEND_ORIGIN;
 
 /**
  * 游客试用：未登录用户可写一条临时日志并体验一次 AI 整理。
- * 不落库，仅返回 AI 结果；按 IP 限流防滥用。
+ * 不落库，仅返回 AI 结果；按 IP 限流防止滥用。
  */
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = LOCAL_FRONTEND_ORIGIN)
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/trial")
@@ -30,7 +32,7 @@ public class PublicTrialController {
 
     private final AiService aiService;
     private final AiRateLimiter aiRateLimiter;
-    private final ExecutorService sseExecutorService;
+    private final SseEmitterSupport sseEmitterSupport;
 
     @PostMapping("/analyze")
     public LogAiResult analyze(
@@ -54,8 +56,6 @@ public class PublicTrialController {
             HttpServletRequest httpRequest,
             jakarta.servlet.http.HttpServletResponse httpResponse
     ) {
-        httpResponse.setHeader("X-Accel-Buffering", "no");
-        httpResponse.setHeader("Cache-Control", "no-cache");
         aiRateLimiter.checkTrial(resolveClientIp(httpRequest));
 
         MeaningLog log = new MeaningLog();
@@ -64,31 +64,14 @@ public class PublicTrialController {
         log.setLogDate(request.getLogDate());
         log.setMood(request.getMood());
 
-        SseEmitter emitter = new SseEmitter(120_000L);
+        SseEmitter emitter = sseEmitterSupport.create(httpResponse);
 
-        sseExecutorService.submit(() -> {
-            try {
-                aiService.streamAnalyzeLog(log, List.of(),
-                        chunk -> {
-                            try {
-                                emitter.send(SseEmitter.event().data(chunk));
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        },
-                        () -> {
-                            try {
-                                emitter.send(SseEmitter.event().name("done").data(""));
-                                emitter.complete();
-                            } catch (Exception e) {
-                                emitter.completeWithError(e);
-                            }
-                        }
-                );
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-        });
+        sseEmitterSupport.submit(emitter, () -> aiService.streamAnalyzeLog(
+                log,
+                List.of(),
+                chunk -> sseEmitterSupport.sendData(emitter, chunk),
+                () -> sseEmitterSupport.completeWithDone(emitter)
+        ));
 
         return emitter;
     }

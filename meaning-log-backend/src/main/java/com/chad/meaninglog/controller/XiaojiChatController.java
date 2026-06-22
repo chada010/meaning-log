@@ -9,6 +9,7 @@ import com.chad.meaninglog.entity.AiChatSession;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.service.AiService;
 import com.chad.meaninglog.service.XiaojiChatService;
+import com.chad.meaninglog.web.SseEmitterSupport;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,7 +23,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
+
+import static com.chad.meaninglog.web.WebConstants.SSE_DONE_EVENT;
+import static com.chad.meaninglog.web.WebConstants.SSE_SESSION_EVENT;
 
 @RestController
 @RequiredArgsConstructor
@@ -31,7 +34,7 @@ public class XiaojiChatController {
 
     private final XiaojiChatService xiaojiChatService;
     private final AiService aiService;
-    private final ExecutorService sseExecutorService;
+    private final SseEmitterSupport sseEmitterSupport;
 
     @GetMapping("/sessions")
     public List<AiChatSessionResponse> findGeneralSessions(
@@ -62,40 +65,22 @@ public class XiaojiChatController {
             @Valid @RequestBody AiChatRequest request,
             jakarta.servlet.http.HttpServletResponse response
     ) {
-        response.setHeader("X-Accel-Buffering", "no");
-        response.setHeader("Cache-Control", "no-cache");
-        SseEmitter emitter = new SseEmitter(120_000L);
+        SseEmitter emitter = sseEmitterSupport.create(response);
         AiChatSession session = xiaojiChatService.prepareCompanionStream(
                 user, request.getSessionId(), request.getMessage());
         List<OpenAiClient.ChatTurn> history = xiaojiChatService.buildCompanionHistory(session);
 
         StringBuilder buffer = new StringBuilder();
 
-        sseExecutorService.submit(() -> {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("session")
-                        .data(Map.of("sessionId", session.getId())));
-
-                aiService.streamChatWithCompanion(history, request.getMessage(), chunk -> {
-                    try {
-                        buffer.append(chunk);
-                        emitter.send(SseEmitter.event().data(chunk));
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }, () -> {
-                    try {
-                        xiaojiChatService.persistStreamReply(session, buffer.toString());
-                        emitter.send(SseEmitter.event().name("done").data(""));
-                        emitter.complete();
-                    } catch (Exception e) {
-                        emitter.completeWithError(e);
-                    }
-                });
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
+        sseEmitterSupport.submit(emitter, () -> {
+            sseEmitterSupport.sendEvent(emitter, SSE_SESSION_EVENT, Map.of("sessionId", session.getId()));
+            aiService.streamChatWithCompanion(history, request.getMessage(), chunk -> {
+                buffer.append(chunk);
+                sseEmitterSupport.sendData(emitter, chunk);
+            }, () -> {
+                xiaojiChatService.persistStreamReply(session, buffer.toString());
+                sseEmitterSupport.completeWithDone(emitter);
+            });
         });
 
         return emitter;

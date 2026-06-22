@@ -1,6 +1,7 @@
+import { PENDING_TRIAL_STORAGE_KEY, TRIAL_DRAFT_STORAGE_KEY } from '../constants/app'
 import http from './http'
-import { streamFetchJson } from './stream'
 import { applyLogAi, createLog, type AiSuggestion, type MeaningLogRequest } from './logs'
+import { streamFetchJson } from './stream'
 
 export interface TrialAiResult {
   title: string
@@ -13,9 +14,6 @@ interface PendingTrial {
   ai?: TrialAiResult
 }
 
-const pendingKey = 'meaning-log-pending-trial'
-const trialDraftKey = 'meaning-log-trial-draft'
-
 export const analyzeTrialLog = (data: MeaningLogRequest) => {
   return http.post<TrialAiResult>('/trial/analyze', data)
 }
@@ -24,14 +22,14 @@ export const analyzeTrialLogStream = (data: MeaningLogRequest, onChunk?: (chunk:
   streamFetchJson<TrialAiResult>('/trial/analyze/stream', data, onChunk)
 
 export const savePendingTrial = (pending: PendingTrial) => {
-  localStorage.setItem(pendingKey, JSON.stringify(pending))
+  localStorage.setItem(PENDING_TRIAL_STORAGE_KEY, JSON.stringify(pending))
 }
 
-export const hasPendingTrial = () => Boolean(localStorage.getItem(pendingKey))
+export const hasPendingTrial = () => Boolean(localStorage.getItem(PENDING_TRIAL_STORAGE_KEY))
 
 const clearPendingTrial = () => {
-  localStorage.removeItem(pendingKey)
-  localStorage.removeItem(trialDraftKey)
+  localStorage.removeItem(PENDING_TRIAL_STORAGE_KEY)
+  localStorage.removeItem(TRIAL_DRAFT_STORAGE_KEY)
 }
 
 /**
@@ -39,7 +37,7 @@ const clearPendingTrial = () => {
  * 落库为用户的第一条日志。返回新日志 id；没有待保存内容时返回 null。
  */
 export const persistPendingTrial = async (): Promise<number | null> => {
-  const raw = localStorage.getItem(pendingKey)
+  const raw = localStorage.getItem(PENDING_TRIAL_STORAGE_KEY)
   if (!raw) {
     return null
   }
@@ -68,7 +66,7 @@ export const persistPendingTrial = async (): Promise<number | null> => {
     try {
       await applyLogAi(log.id, suggestion)
     } catch {
-      // AI 结果落库失败不影响已保存的日志，用户之后可在详情页重新整理
+      // AI 结果落库失败不影响已保存的日志，用户之后可在详情页重新整理。
     }
   }
 
