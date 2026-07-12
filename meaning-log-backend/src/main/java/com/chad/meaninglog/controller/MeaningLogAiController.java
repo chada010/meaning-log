@@ -58,17 +58,19 @@ public class MeaningLogAiController {
             @PathVariable Long id,
             jakarta.servlet.http.HttpServletResponse response
     ) {
-        SseEmitter emitter = sseEmitterSupport.create(response);
-        MeaningLogService.AnalyzeStreamContext ctx = meaningLogService.prepareAnalyzeStream(user, id);
+        try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            SseEmitter emitter = sseEmitterSupport.create(response);
+            MeaningLogService.AnalyzeStreamContext ctx = meaningLogService.prepareAnalyzeStream(user, id);
 
-        sseEmitterSupport.submit(emitter, () -> aiService.streamAnalyzeLog(
-                ctx.log(),
-                ctx.images(),
-                chunk -> sseEmitterSupport.sendData(emitter, chunk),
-                () -> sseEmitterSupport.completeWithDone(emitter)
-        ));
+            sseEmitterSupport.submit(submission, emitter, () -> aiService.streamAnalyzeLog(
+                    ctx.log(),
+                    ctx.images(),
+                    chunk -> sseEmitterSupport.sendData(emitter, chunk),
+                    () -> sseEmitterSupport.completeWithDone(emitter)
+            ));
 
-        return emitter;
+            return emitter;
+        }
     }
 
     @PostMapping("/{id}/ai/chat")
@@ -105,27 +107,29 @@ public class MeaningLogAiController {
             @Valid @RequestBody AiChatRequest request,
             jakarta.servlet.http.HttpServletResponse response
     ) {
-        SseEmitter emitter = sseEmitterSupport.create(response);
-        XiaojiChatService.LogRefineStreamContext ctx =
-                xiaojiChatService.prepareLogRefineStream(user, id, request.getMessage());
+        try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            SseEmitter emitter = sseEmitterSupport.create(response);
+            XiaojiChatService.LogRefineStreamContext ctx =
+                    xiaojiChatService.prepareLogRefineStream(user, id, request.getMessage());
 
-        StringBuilder buffer = new StringBuilder();
+            StringBuilder buffer = new StringBuilder();
 
-        sseEmitterSupport.submit(emitter, () -> aiService.streamRefineLogSummary(
-                ctx.log(),
-                ctx.history(),
-                ctx.images(),
-                request.getMessage(),
-                chunk -> {
-                    buffer.append(chunk);
-                    sseEmitterSupport.sendData(emitter, chunk);
-                },
-                () -> {
-                    xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
-                    sseEmitterSupport.completeWithDone(emitter);
-                }
-        ));
+            sseEmitterSupport.submit(submission, emitter, () -> aiService.streamRefineLogSummary(
+                    ctx.log(),
+                    ctx.history(),
+                    ctx.images(),
+                    request.getMessage(),
+                    chunk -> {
+                        buffer.append(chunk);
+                        sseEmitterSupport.sendData(emitter, chunk);
+                    },
+                    () -> {
+                        xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
+                        sseEmitterSupport.completeWithDone(emitter);
+                    }
+            ));
 
-        return emitter;
+            return emitter;
+        }
     }
 }

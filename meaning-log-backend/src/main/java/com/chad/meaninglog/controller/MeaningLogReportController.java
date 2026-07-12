@@ -115,30 +115,32 @@ public class MeaningLogReportController {
             @Valid @RequestBody AiChatRequest request,
             jakarta.servlet.http.HttpServletResponse response
     ) {
-        SseEmitter emitter = sseEmitterSupport.create(response);
-        XiaojiChatService.ReportRefineStreamContext ctx =
-                xiaojiChatService.prepareReportRefineStream(user, reportId, request.getMessage());
+        try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            SseEmitter emitter = sseEmitterSupport.create(response);
+            XiaojiChatService.ReportRefineStreamContext ctx =
+                    xiaojiChatService.prepareReportRefineStream(user, reportId, request.getMessage());
 
-        StringBuilder buffer = new StringBuilder();
+            StringBuilder buffer = new StringBuilder();
 
-        sseEmitterSupport.submit(emitter, () -> aiService.streamRefineReport(
-                ctx.report().getTitle(),
-                ctx.report().getPeriod(),
-                ctx.report().getSummary(),
-                ctx.report().getTags(),
-                ctx.history(),
-                request.getMessage(),
-                chunk -> {
-                    buffer.append(chunk);
-                    sseEmitterSupport.sendData(emitter, chunk);
-                },
-                () -> {
-                    xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
-                    sseEmitterSupport.completeWithDone(emitter);
-                }
-        ));
+            sseEmitterSupport.submit(submission, emitter, () -> aiService.streamRefineReport(
+                    ctx.report().getTitle(),
+                    ctx.report().getPeriod(),
+                    ctx.report().getSummary(),
+                    ctx.report().getTags(),
+                    ctx.history(),
+                    request.getMessage(),
+                    chunk -> {
+                        buffer.append(chunk);
+                        sseEmitterSupport.sendData(emitter, chunk);
+                    },
+                    () -> {
+                        xiaojiChatService.persistStreamReply(ctx.session(), buffer.toString());
+                        sseEmitterSupport.completeWithDone(emitter);
+                    }
+            ));
 
-        return emitter;
+            return emitter;
+        }
     }
 
     record ReportStreamRequest(LocalDate startDate, LocalDate endDate, String title) {
@@ -156,38 +158,40 @@ public class MeaningLogReportController {
             @RequestBody ReportStreamRequest request,
             jakarta.servlet.http.HttpServletResponse response
     ) {
-        MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareReportStream(
-                user, request.startDate(), request.endDate(), request.resolvedTitle());
+        try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareReportStream(
+                    user, request.startDate(), request.endDate(), request.resolvedTitle());
 
-        SseEmitter emitter = sseEmitterSupport.create(response);
-        StringBuilder buffer = new StringBuilder();
+            SseEmitter emitter = sseEmitterSupport.create(response);
+            StringBuilder buffer = new StringBuilder();
 
-        sseEmitterSupport.submit(emitter, () -> aiService.streamSummarizeLogs(
-                request.resolvedTitle(),
-                ctx.period(),
-                ctx.logs(),
-                chunk -> {
-                    buffer.append(chunk);
-                    sseEmitterSupport.sendData(emitter, chunk);
-                },
-                () -> {
-                    try {
-                        AiReportResponse aiResponse = objectMapper.readValue(
-                                buffer.toString(), AiReportResponse.class);
-                        AiReportResponse saved = meaningLogService.saveReport(
-                                user, ctx.type(), ctx.startDate(), ctx.endDate(), aiResponse);
-                        sseEmitterSupport.completeWithEvent(
-                                emitter,
-                                SSE_DONE_EVENT,
-                                objectMapper.writeValueAsString(saved)
-                        );
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
+            sseEmitterSupport.submit(submission, emitter, () -> aiService.streamSummarizeLogs(
+                    request.resolvedTitle(),
+                    ctx.period(),
+                    ctx.logs(),
+                    chunk -> {
+                        buffer.append(chunk);
+                        sseEmitterSupport.sendData(emitter, chunk);
+                    },
+                    () -> {
+                        try {
+                            AiReportResponse aiResponse = objectMapper.readValue(
+                                    buffer.toString(), AiReportResponse.class);
+                            AiReportResponse saved = meaningLogService.saveReport(
+                                    user, ctx.type(), ctx.startDate(), ctx.endDate(), aiResponse);
+                            sseEmitterSupport.completeWithEvent(
+                                    emitter,
+                                    SSE_DONE_EVENT,
+                                    objectMapper.writeValueAsString(saved)
+                            );
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
                     }
-                }
-        ));
+            ));
 
-        return emitter;
+            return emitter;
+        }
     }
 
     @PostMapping(value = "/ai/daily-summary/stream", produces = "text/event-stream")
@@ -196,37 +200,39 @@ public class MeaningLogReportController {
             @RequestBody DailySummaryStreamRequest request,
             jakarta.servlet.http.HttpServletResponse response
     ) {
-        MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareDailySummaryStream(
-                user, request.date());
+        try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareDailySummaryStream(
+                    user, request.date());
 
-        SseEmitter emitter = sseEmitterSupport.create(response);
-        StringBuilder buffer = new StringBuilder();
+            SseEmitter emitter = sseEmitterSupport.create(response);
+            StringBuilder buffer = new StringBuilder();
 
-        sseEmitterSupport.submit(emitter, () -> aiService.streamSummarizeLogs(
-                "AI 当天总结",
-                ctx.period(),
-                ctx.logs(),
-                chunk -> {
-                    buffer.append(chunk);
-                    sseEmitterSupport.sendData(emitter, chunk);
-                },
-                () -> {
-                    try {
-                        AiReportResponse aiResponse = objectMapper.readValue(
-                                buffer.toString(), AiReportResponse.class);
-                        AiReportResponse saved = meaningLogService.saveReport(
-                                user, ctx.type(), ctx.startDate(), ctx.endDate(), aiResponse);
-                        sseEmitterSupport.completeWithEvent(
-                                emitter,
-                                SSE_DONE_EVENT,
-                                objectMapper.writeValueAsString(saved)
-                        );
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
+            sseEmitterSupport.submit(submission, emitter, () -> aiService.streamSummarizeLogs(
+                    "AI 当天总结",
+                    ctx.period(),
+                    ctx.logs(),
+                    chunk -> {
+                        buffer.append(chunk);
+                        sseEmitterSupport.sendData(emitter, chunk);
+                    },
+                    () -> {
+                        try {
+                            AiReportResponse aiResponse = objectMapper.readValue(
+                                    buffer.toString(), AiReportResponse.class);
+                            AiReportResponse saved = meaningLogService.saveReport(
+                                    user, ctx.type(), ctx.startDate(), ctx.endDate(), aiResponse);
+                            sseEmitterSupport.completeWithEvent(
+                                    emitter,
+                                    SSE_DONE_EVENT,
+                                    objectMapper.writeValueAsString(saved)
+                            );
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
                     }
-                }
-        ));
+            ));
 
-        return emitter;
+            return emitter;
+        }
     }
 }

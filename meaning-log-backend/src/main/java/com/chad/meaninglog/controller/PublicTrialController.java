@@ -58,23 +58,25 @@ public class PublicTrialController {
             HttpServletRequest httpRequest,
             jakarta.servlet.http.HttpServletResponse httpResponse
     ) {
-        aiRateLimiter.checkTrial(clientIpResolver.resolve(httpRequest));
+        try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            aiRateLimiter.checkTrial(clientIpResolver.resolve(httpRequest));
 
-        MeaningLog log = new MeaningLog();
-        log.setTitle(request.getTitle());
-        log.setContent(request.getContent());
-        log.setLogDate(request.getLogDate());
-        log.setMood(request.getMood());
+            MeaningLog log = new MeaningLog();
+            log.setTitle(request.getTitle());
+            log.setContent(request.getContent());
+            log.setLogDate(request.getLogDate());
+            log.setMood(request.getMood());
 
-        SseEmitter emitter = sseEmitterSupport.create(httpResponse);
+            SseEmitter emitter = sseEmitterSupport.create(httpResponse);
 
-        sseEmitterSupport.submit(emitter, () -> aiService.streamAnalyzeLog(
-                log,
-                List.of(),
-                chunk -> sseEmitterSupport.sendData(emitter, chunk),
-                () -> sseEmitterSupport.completeWithDone(emitter)
-        ));
+            sseEmitterSupport.submit(submission, emitter, () -> aiService.streamAnalyzeLog(
+                    log,
+                    List.of(),
+                    chunk -> sseEmitterSupport.sendData(emitter, chunk),
+                    () -> sseEmitterSupport.completeWithDone(emitter)
+            ));
 
-        return emitter;
+            return emitter;
+        }
     }
 }

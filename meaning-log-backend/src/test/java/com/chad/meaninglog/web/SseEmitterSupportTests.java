@@ -41,6 +41,24 @@ class SseEmitterSupportTests {
         }
     }
 
+    @Test
+    void releasesReservedCapacityAfterTaskCompletes() throws InterruptedException {
+        ThreadPoolTaskExecutor executor = boundedExecutor();
+        SseEmitterSupport support = new SseEmitterSupport(executor);
+        CountDownLatch completed = new CountDownLatch(1);
+
+        try (SseEmitterSupport.Submission submission = support.reserveSubmission()) {
+            support.submit(submission, new SseEmitter(), completed::countDown);
+        }
+        assertThat(completed.await(1, TimeUnit.SECONDS)).isTrue();
+
+        try (SseEmitterSupport.Submission ignored = support.reserveSubmission()) {
+            assertThat(ignored).isNotNull();
+        } finally {
+            executor.shutdown();
+        }
+    }
+
     private ThreadPoolTaskExecutor boundedExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);

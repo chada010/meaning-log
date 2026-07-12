@@ -65,24 +65,26 @@ public class XiaojiChatController {
             @Valid @RequestBody AiChatRequest request,
             jakarta.servlet.http.HttpServletResponse response
     ) {
-        SseEmitter emitter = sseEmitterSupport.create(response);
-        AiChatSession session = xiaojiChatService.prepareCompanionStream(
-                user, request.getSessionId(), request.getMessage());
-        List<OpenAiClient.ChatTurn> history = xiaojiChatService.buildCompanionHistory(session);
+        try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            SseEmitter emitter = sseEmitterSupport.create(response);
+            AiChatSession session = xiaojiChatService.prepareCompanionStream(
+                    user, request.getSessionId(), request.getMessage());
+            List<OpenAiClient.ChatTurn> history = xiaojiChatService.buildCompanionHistory(session);
 
-        StringBuilder buffer = new StringBuilder();
+            StringBuilder buffer = new StringBuilder();
 
-        sseEmitterSupport.submit(emitter, () -> {
-            sseEmitterSupport.sendEvent(emitter, SSE_SESSION_EVENT, Map.of("sessionId", session.getId()));
-            aiService.streamChatWithCompanion(history, request.getMessage(), chunk -> {
-                buffer.append(chunk);
-                sseEmitterSupport.sendData(emitter, chunk);
-            }, () -> {
-                xiaojiChatService.persistStreamReply(session, buffer.toString());
-                sseEmitterSupport.completeWithDone(emitter);
+            sseEmitterSupport.submit(submission, emitter, () -> {
+                sseEmitterSupport.sendEvent(emitter, SSE_SESSION_EVENT, Map.of("sessionId", session.getId()));
+                aiService.streamChatWithCompanion(history, request.getMessage(), chunk -> {
+                    buffer.append(chunk);
+                    sseEmitterSupport.sendData(emitter, chunk);
+                }, () -> {
+                    xiaojiChatService.persistStreamReply(session, buffer.toString());
+                    sseEmitterSupport.completeWithDone(emitter);
+                });
             });
-        });
 
-        return emitter;
+            return emitter;
+        }
     }
 }
