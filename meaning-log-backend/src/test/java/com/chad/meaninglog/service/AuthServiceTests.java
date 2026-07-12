@@ -1,5 +1,6 @@
 package com.chad.meaninglog.service;
 
+import com.chad.meaninglog.dto.LoginRequest;
 import com.chad.meaninglog.dto.ResetPasswordRequest;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.repository.UserAccountRepository;
@@ -19,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +33,17 @@ class AuthServiceTests {
 
         assertThat(validator.validate(request))
                 .anyMatch(violation -> violation.getPropertyPath().toString().equals("verificationCode"));
+    }
+
+    @Test
+    void loginRejectsAnIdentifierLongerThanTheRedisKeyBoundary() {
+        Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+        LoginRequest request = new LoginRequest();
+        request.setIdentifier("a".repeat(121));
+        request.setPassword("password");
+
+        assertThat(validator.validate(request))
+                .anyMatch(violation -> violation.getPropertyPath().toString().equals("identifier"));
     }
 
     @Test
@@ -70,12 +83,70 @@ class AuthServiceTests {
         verifyNoInteractions(repository, passwordHasher);
     }
 
+    @Test
+    void loginReservesAnAttemptUsingTheResolvedSourceAddress() {
+        UserAccountRepository repository = mock(UserAccountRepository.class);
+        PasswordHasher passwordHasher = mock(PasswordHasher.class);
+        LoginAttemptService loginAttemptService = mock(LoginAttemptService.class);
+        when(repository.findByEmail("alice@example.com")).thenReturn(Optional.of(new UserAccount()));
+        when(passwordHasher.matches("incorrect-password", null)).thenReturn(false);
+
+        assertThatThrownBy(() -> service(repository, passwordHasher, mock(EmailVerificationService.class), loginAttemptService)
+                .login(loginRequest(), "198.51.100.10"))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(loginAttemptService).reserveAttempt("alice@example.com", "198.51.100.10");
+    }
+
+    @Test
+    void loginNormalizesUsernameForAttemptLimitsWithoutChangingLookup() {
+        UserAccountRepository repository = mock(UserAccountRepository.class);
+        PasswordHasher passwordHasher = mock(PasswordHasher.class);
+        LoginAttemptService loginAttemptService = mock(LoginAttemptService.class);
+        when(repository.findByUsername("Alice")).thenReturn(Optional.of(new UserAccount()));
+        when(passwordHasher.matches("incorrect-password", null)).thenReturn(false);
+
+        assertThatThrownBy(() -> service(repository, passwordHasher, mock(EmailVerificationService.class), loginAttemptService)
+                .login(loginRequest("Alice"), "198.51.100.10"))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(loginAttemptService).reserveAttempt("alice", "198.51.100.10");
+        verify(repository).findByUsername("Alice");
+    }
+
+    @Test
+    void successfulLoginClearsTheReservedAttempt() {
+        UserAccountRepository repository = mock(UserAccountRepository.class);
+        PasswordHasher passwordHasher = mock(PasswordHasher.class);
+        LoginAttemptService loginAttemptService = mock(LoginAttemptService.class);
+        UserAccount user = new UserAccount();
+        user.setPasswordHash("stored-hash");
+        when(repository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(passwordHasher.matches("correct-password", "stored-hash")).thenReturn(true);
+        LoginRequest request = loginRequest();
+        request.setPassword("correct-password");
+
+        service(repository, passwordHasher, mock(EmailVerificationService.class), loginAttemptService)
+                .login(request, "198.51.100.10");
+
+        verify(loginAttemptService).clearFailures("alice@example.com", "198.51.100.10");
+    }
+
     private AuthService service(
             UserAccountRepository repository,
             PasswordHasher passwordHasher,
             EmailVerificationService verificationService
     ) {
-        return new AuthService(repository, passwordHasher, mock(JwtService.class), verificationService);
+        return service(repository, passwordHasher, verificationService, mock(LoginAttemptService.class));
+    }
+
+    private AuthService service(
+            UserAccountRepository repository,
+            PasswordHasher passwordHasher,
+            EmailVerificationService verificationService,
+            LoginAttemptService loginAttemptService
+    ) {
+        return new AuthService(repository, passwordHasher, mock(JwtService.class), verificationService, loginAttemptService);
     }
 
     private ResetPasswordRequest resetRequest(String verificationCode) {
@@ -83,6 +154,17 @@ class AuthServiceTests {
         request.setEmail(" Alice@Example.COM ");
         request.setNewPassword("new-password");
         ReflectionTestUtils.setField(request, "verificationCode", verificationCode);
+        return request;
+    }
+
+    private LoginRequest loginRequest() {
+        return loginRequest("Alice@Example.COM");
+    }
+
+    private LoginRequest loginRequest(String identifier) {
+        LoginRequest request = new LoginRequest();
+        request.setIdentifier(identifier);
+        request.setPassword("incorrect-password");
         return request;
     }
 }

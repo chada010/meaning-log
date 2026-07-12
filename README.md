@@ -168,6 +168,10 @@ npm run dev
 | `APP_AI_MODEL` | AI 模型名 | `deepseek-chat` |
 | `JWT_SECRET` | Base64 编码的随机 JWT 密钥，解码后至少 32 字节 | 必须配置；本地可使用 `application-local.properties` 示例值 |
 | `AUTH_TRUSTED_PROXY_CIDRS` | 可信反向代理 CIDR，多个值以逗号分隔 | 空，仅直连部署 |
+| `AUTH_LOGIN_ATTEMPT_WINDOW_SECONDS` | 登录失败限流窗口（秒） | `900` |
+| `AUTH_LOGIN_MAX_ATTEMPTS_PER_SOURCE` | 单来源登录尝试次数上限 | `20` / 15 分钟 |
+| `AUTH_LOGIN_MAX_ATTEMPTS_PER_PRINCIPAL_SOURCE` | 单账号单来源登录尝试次数上限 | `5` / 15 分钟 |
+| `AUTH_LOGIN_MAX_ATTEMPTS_PER_PRINCIPAL` | 单账号跨来源登录尝试次数上限 | `50` / 15 分钟 |
 | `MAIL_HOST` | SMTP Host | `smtp.qq.com` |
 | `MAIL_PORT` | SMTP Port | `465` |
 | `MAIL_USERNAME` | 发信邮箱 | `your-email@qq.com` |

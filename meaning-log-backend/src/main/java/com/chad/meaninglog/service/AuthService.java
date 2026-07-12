@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Locale;
+
 import static com.chad.meaninglog.util.EmailNormalizer.normalize;
 
 @Service
@@ -24,6 +26,7 @@ public class AuthService {
     private final PasswordHasher passwordHasher;
     private final JwtService jwtService;
     private final EmailVerificationService emailVerificationService;
+    private final LoginAttemptService loginAttemptService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request, String sourceAddress) {
@@ -47,11 +50,15 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String sourceAddress) {
         String identifier = request.getIdentifier().trim();
+        boolean isEmailIdentifier = identifier.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+        String principal = isEmailIdentifier ? normalize(identifier) : identifier.toLowerCase(Locale.ROOT);
+        loginAttemptService.reserveAttempt(principal, sourceAddress);
+
         UserAccount user;
-        if (identifier.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            user = userAccountRepository.findByEmail(normalize(identifier))
+        if (isEmailIdentifier) {
+            user = userAccountRepository.findByEmail(principal)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password"));
         } else {
             user = userAccountRepository.findByUsername(identifier)
@@ -62,6 +69,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password");
         }
 
+        loginAttemptService.clearFailures(principal, sourceAddress);
         return createAuthResponse(user);
     }
 

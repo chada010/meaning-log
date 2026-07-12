@@ -59,6 +59,18 @@ class AuthControllerTests {
     }
 
     @Test
+    void loginForwardsTheResolvedClientAddress() {
+        AuthService authService = mock(AuthService.class);
+        AuthController controller = controller(authService);
+        MockHttpServletRequest servletRequest = requestWithSourceAddress();
+        servletRequest.addHeader("X-Forwarded-For", CLIENT_ADDRESS + ", 10.0.0.2");
+
+        controller.login(new com.chad.meaninglog.dto.LoginRequest(), servletRequest);
+
+        verify(authService).login(org.mockito.ArgumentMatchers.any(), org.mockito.Mockito.eq(CLIENT_ADDRESS));
+    }
+
+    @Test
     void registerUsesForwardedClientAddressOnlyFromConfiguredTrustedProxy() {
         AuthService authService = mock(AuthService.class);
         AuthController controller = controller(authService);
