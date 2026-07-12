@@ -85,7 +85,7 @@ const submit = async () => {
         type="info"
         show-icon
         :closable="false"
-        title="当前版本使用注册邮箱直接重置密码，后续可以接入邮箱验证码。"
+        title="请输入发送到注册邮箱的验证码后重置密码。"
       />
 
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">

@@ -84,7 +84,7 @@ copy meaning-log-backend\application-local.properties.example meaning-log-backen
 copy meaning-log-frontend\.env.local.example meaning-log-frontend\.env.local
 ```
 
-打开 `meaning-log-backend/application-local.properties`，填写自己的 DeepSeek Key；示例已提供仅供本地开发的 JWT 密钥。生产环境必须设置 `JWT_SECRET`：
+打开 `meaning-log-backend/application-local.properties`，填写自己的 DeepSeek Key；示例已提供仅供本地开发的 JWT 密钥。运行本地后端时设置 `SPRING_PROFILES_ACTIVE=local`，生产环境必须设置 `JWT_SECRET`：
 
 ```properties
 app.ai.api-key=your-deepseek-api-key
@@ -111,6 +111,7 @@ MySQL 和 Redis 第一次初始化需要几十秒，直到两项状态均为 `he
 
 ```cmd
 cd meaning-log-backend
+set SPRING_PROFILES_ACTIVE=local
 mvnw.cmd spring-boot:run
 ```
 
