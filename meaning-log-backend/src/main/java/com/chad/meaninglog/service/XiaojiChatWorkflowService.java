@@ -157,6 +157,11 @@ public class XiaojiChatWorkflowService {
         return xiaojiChatSupportService.buildRecentTurns(session);
     }
 
+    @Transactional
+    public void deleteLogChats(MeaningLog log) {
+        xiaojiChatSupportService.deleteLogChats(log);
+    }
+
     private void assertGeneralSession(AiChatSession session) {
         if (session.getType() != AiChatSession.Type.GENERAL) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This session is not a general chat");

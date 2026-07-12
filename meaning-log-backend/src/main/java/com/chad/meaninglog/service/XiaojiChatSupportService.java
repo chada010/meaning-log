@@ -127,6 +127,12 @@ public class XiaojiChatSupportService {
         sessionRepository.save(session);
     }
 
+    @Transactional
+    public void deleteLogChats(MeaningLog log) {
+        messageRepository.deleteByMeaningLogId(log.getId());
+        sessionRepository.deleteByMeaningLog(log);
+    }
+
     private String truncate(String value, int maxLength) {
         if (value == null || value.isBlank()) {
             return "新的小记对话";

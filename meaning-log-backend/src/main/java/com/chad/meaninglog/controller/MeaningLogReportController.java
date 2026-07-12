@@ -12,7 +12,6 @@ import com.chad.meaninglog.web.SseEmitterSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,26 +44,21 @@ public class MeaningLogReportController {
     @PostMapping("/ai/daily-summary")
     public AiReportResponse summarizeDay(
             @AuthenticationPrincipal UserAccount user,
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate date
+            @RequestParam(required = false) String date
     ) {
-        return meaningLogService.summarizeDay(user, date);
+        return meaningLogService.summarizeDay(user, meaningLogService.parseDailySummaryDate(date));
     }
 
     @PostMapping("/ai/report")
     public AiReportResponse summarizePeriod(
             @AuthenticationPrincipal UserAccount user,
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate startDate,
-            @RequestParam
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate endDate,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
             @RequestParam(defaultValue = "AI 报告")
             String title
     ) {
-        return meaningLogService.summarizePeriod(user, startDate, endDate, title);
+        MeaningLogService.ReportDateRange dateRange = meaningLogService.parseReportDateRange(startDate, endDate);
+        return meaningLogService.summarizePeriod(user, dateRange.startDate(), dateRange.endDate(), title);
     }
 
     @GetMapping("/ai/reports")
@@ -143,30 +137,36 @@ public class MeaningLogReportController {
         }
     }
 
-    record ReportStreamRequest(LocalDate startDate, LocalDate endDate, String title) {
+    record ReportStreamRequest(String startDate, String endDate, String title) {
         String resolvedTitle() {
             return title == null || title.isBlank() ? "AI 报告" : title;
         }
     }
 
-    record DailySummaryStreamRequest(LocalDate date) {
+    record DailySummaryStreamRequest(String date) {
     }
 
     @PostMapping(value = "/ai/report/stream", produces = "text/event-stream")
     public SseEmitter generateReportStream(
             @AuthenticationPrincipal UserAccount user,
-            @RequestBody ReportStreamRequest request,
+            @RequestBody(required = false) ReportStreamRequest request,
             jakarta.servlet.http.HttpServletResponse response
     ) {
+        ReportStreamRequest reportRequest = request == null
+                ? new ReportStreamRequest(null, null, null)
+                : request;
         try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            MeaningLogService.ReportDateRange dateRange = meaningLogService.parseReportDateRange(
+                    reportRequest.startDate(),
+                    reportRequest.endDate());
             MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareReportStream(
-                    user, request.startDate(), request.endDate(), request.resolvedTitle());
+                    user, dateRange.startDate(), dateRange.endDate(), reportRequest.resolvedTitle());
 
             SseEmitter emitter = sseEmitterSupport.create(response);
             StringBuilder buffer = new StringBuilder();
 
             sseEmitterSupport.submit(submission, emitter, () -> aiService.streamSummarizeLogs(
-                    request.resolvedTitle(),
+                    reportRequest.resolvedTitle(),
                     ctx.period(),
                     ctx.logs(),
                     chunk -> {
@@ -197,12 +197,13 @@ public class MeaningLogReportController {
     @PostMapping(value = "/ai/daily-summary/stream", produces = "text/event-stream")
     public SseEmitter generateDailySummaryStream(
             @AuthenticationPrincipal UserAccount user,
-            @RequestBody DailySummaryStreamRequest request,
+            @RequestBody(required = false) DailySummaryStreamRequest request,
             jakarta.servlet.http.HttpServletResponse response
     ) {
         try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            LocalDate date = meaningLogService.parseDailySummaryDate(request == null ? null : request.date());
             MeaningLogService.ReportStreamContext ctx = meaningLogService.prepareDailySummaryStream(
-                    user, request.date());
+                    user, date);
 
             SseEmitter emitter = sseEmitterSupport.create(response);
             StringBuilder buffer = new StringBuilder();

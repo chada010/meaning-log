@@ -59,6 +59,11 @@ public interface AiChatSessionRepository extends BaseMapper<AiChatSession> {
         return session;
     }
 
+    default void deleteByMeaningLog(MeaningLog meaningLog) {
+        delete(new LambdaQueryWrapper<AiChatSession>()
+                .eq(AiChatSession::getMeaningLogId, meaningLog.getId()));
+    }
+
     private LambdaQueryWrapper<AiChatSession> baseUserQuery(UserAccount user) {
         return new LambdaQueryWrapper<AiChatSession>().eq(AiChatSession::getUserId, user.getId());
     }
