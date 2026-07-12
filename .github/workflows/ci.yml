@@ -21,6 +21,7 @@ jobs:
           cache: npm
           cache-dependency-path: meaning-log-frontend/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run type-check
       - run: npm run build
 
@@ -71,4 +72,4 @@ jobs:
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: 6379
           DEEPSEEK_API_KEY: ci-not-a-real-key
-          JWT_SECRET: meaning-log-ci-jwt-secret-at-least-32-chars
+          JWT_SECRET: Z3J5bEJ4L2lxanFQU0xJMzVGcFhTc0cwWFFUTzVaWlNkRTY=

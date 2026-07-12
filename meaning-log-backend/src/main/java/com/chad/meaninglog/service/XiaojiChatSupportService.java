@@ -43,6 +43,12 @@ public class XiaojiChatSupportService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Log not found"));
     }
 
+    @Transactional
+    public MeaningLog getMeaningLogForUpdate(UserAccount user, Long logId) {
+        return meaningLogRepository.findByIdAndUserForUpdate(logId, user)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Log not found"));
+    }
+
     @Transactional(readOnly = true)
     public AiReport getAiReport(UserAccount user, Long reportId) {
         return aiReportRepository.findByIdAndUser(reportId, user)
@@ -125,6 +131,17 @@ public class XiaojiChatSupportService {
         messageRepository.save(message);
         session.setUpdatedAt(LocalDateTime.now());
         sessionRepository.save(session);
+    }
+
+    @Transactional
+    public boolean lockLogForStreamReply(Long logId) {
+        return meaningLogRepository.findByIdForUpdate(logId).isPresent();
+    }
+
+    @Transactional
+    public void deleteLogChats(MeaningLog log) {
+        messageRepository.deleteByMeaningLogId(log.getId());
+        sessionRepository.deleteByMeaningLog(log);
     }
 
     private String truncate(String value, int maxLength) {

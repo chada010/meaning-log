@@ -86,4 +86,8 @@ public class XiaojiChatService {
     public List<OpenAiClient.ChatTurn> buildCompanionHistory(AiChatSession session) {
         return xiaojiChatWorkflowService.buildCompanionHistory(session);
     }
+
+    public void deleteLogChats(MeaningLog log) {
+        xiaojiChatWorkflowService.deleteLogChats(log);
+    }
 }

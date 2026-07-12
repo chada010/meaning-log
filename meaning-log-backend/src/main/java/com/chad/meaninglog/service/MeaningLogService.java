@@ -107,6 +107,16 @@ public class MeaningLogService {
     public record ReportStreamContext(List<MeaningLog> logs, String period, AiReport.Type type,
                                       LocalDate startDate, LocalDate endDate) {}
 
+    public record ReportDateRange(LocalDate startDate, LocalDate endDate) {}
+
+    public LocalDate parseDailySummaryDate(String date) {
+        return meaningLogReportService.parseDailySummaryDate(date);
+    }
+
+    public ReportDateRange parseReportDateRange(String startDate, String endDate) {
+        return meaningLogReportService.parseReportDateRange(startDate, endDate);
+    }
+
     public ReportStreamContext prepareReportStream(
             UserAccount user, LocalDate startDate, LocalDate endDate, String title
     ) {

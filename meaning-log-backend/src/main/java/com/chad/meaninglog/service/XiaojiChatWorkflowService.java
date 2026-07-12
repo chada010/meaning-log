@@ -30,7 +30,7 @@ public class XiaojiChatWorkflowService {
     @Transactional
     public AiChatResponse chatWithLog(UserAccount user, Long logId, String userMessage) {
         aiRateLimiter.check(user);
-        MeaningLog log = xiaojiChatSupportService.getMeaningLog(user, logId);
+        MeaningLog log = xiaojiChatSupportService.getMeaningLogForUpdate(user, logId);
         AiChatSession session = xiaojiChatSupportService.getOrCreateLogSession(user, log);
         List<OpenAiClient.ChatTurn> history = xiaojiChatSupportService.buildRecentTurns(session);
 
@@ -107,7 +107,7 @@ public class XiaojiChatWorkflowService {
     @Transactional
     public XiaojiChatService.LogRefineStreamContext prepareLogRefineStream(UserAccount user, Long logId, String userMessage) {
         aiRateLimiter.check(user);
-        MeaningLog log = xiaojiChatSupportService.getMeaningLog(user, logId);
+        MeaningLog log = xiaojiChatSupportService.getMeaningLogForUpdate(user, logId);
         AiChatSession session = xiaojiChatSupportService.getOrCreateLogSession(user, log);
         List<OpenAiClient.ChatTurn> history = xiaojiChatSupportService.buildRecentTurns(session);
         List<LogImage> images = xiaojiChatSupportService.findLogImages(log);
@@ -149,12 +149,21 @@ public class XiaojiChatWorkflowService {
 
     @Transactional
     public void persistStreamReply(AiChatSession session, String reply) {
+        if (session.getMeaningLogId() != null
+                && !xiaojiChatSupportService.lockLogForStreamReply(session.getMeaningLogId())) {
+            return;
+        }
         xiaojiChatSupportService.saveMessage(session, AiChatMessage.Role.ASSISTANT, reply);
     }
 
     @Transactional(readOnly = true)
     public List<OpenAiClient.ChatTurn> buildCompanionHistory(AiChatSession session) {
         return xiaojiChatSupportService.buildRecentTurns(session);
+    }
+
+    @Transactional
+    public void deleteLogChats(MeaningLog log) {
+        xiaojiChatSupportService.deleteLogChats(log);
     }
 
     private void assertGeneralSession(AiChatSession session) {

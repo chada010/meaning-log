@@ -26,6 +26,12 @@ public class MeaningLogSupportService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Log not found"));
     }
 
+    @Transactional
+    public MeaningLog getMeaningLogForUpdate(UserAccount user, Long id) {
+        return meaningLogRepository.findByIdAndUserForUpdate(id, user)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Log not found"));
+    }
+
     @Transactional(readOnly = true)
     public AiReport getAiReport(UserAccount user, Long id) {
         return aiReportRepository.findByIdAndUser(id, user)

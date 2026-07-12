@@ -5,6 +5,7 @@ import com.chad.meaninglog.dto.TrialAnalyzeRequest;
 import com.chad.meaninglog.entity.MeaningLog;
 import com.chad.meaninglog.service.AiRateLimiter;
 import com.chad.meaninglog.service.AiService;
+import com.chad.meaninglog.web.ClientIpResolver;
 import com.chad.meaninglog.web.SseEmitterSupport;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -33,13 +34,14 @@ public class PublicTrialController {
     private final AiService aiService;
     private final AiRateLimiter aiRateLimiter;
     private final SseEmitterSupport sseEmitterSupport;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping("/analyze")
     public LogAiResult analyze(
             @Valid @RequestBody TrialAnalyzeRequest request,
             HttpServletRequest httpRequest
     ) {
-        aiRateLimiter.checkTrial(resolveClientIp(httpRequest));
+        aiRateLimiter.checkTrial(clientIpResolver.resolve(httpRequest));
 
         MeaningLog log = new MeaningLog();
         log.setTitle(request.getTitle());
@@ -56,31 +58,25 @@ public class PublicTrialController {
             HttpServletRequest httpRequest,
             jakarta.servlet.http.HttpServletResponse httpResponse
     ) {
-        aiRateLimiter.checkTrial(resolveClientIp(httpRequest));
+        try (SseEmitterSupport.Submission submission = sseEmitterSupport.reserveSubmission()) {
+            aiRateLimiter.checkTrial(clientIpResolver.resolve(httpRequest));
 
-        MeaningLog log = new MeaningLog();
-        log.setTitle(request.getTitle());
-        log.setContent(request.getContent());
-        log.setLogDate(request.getLogDate());
-        log.setMood(request.getMood());
+            MeaningLog log = new MeaningLog();
+            log.setTitle(request.getTitle());
+            log.setContent(request.getContent());
+            log.setLogDate(request.getLogDate());
+            log.setMood(request.getMood());
 
-        SseEmitter emitter = sseEmitterSupport.create(httpResponse);
+            SseEmitter emitter = sseEmitterSupport.create(httpResponse);
 
-        sseEmitterSupport.submit(emitter, () -> aiService.streamAnalyzeLog(
-                log,
-                List.of(),
-                chunk -> sseEmitterSupport.sendData(emitter, chunk),
-                () -> sseEmitterSupport.completeWithDone(emitter)
-        ));
+            sseEmitterSupport.submit(submission, emitter, () -> aiService.streamAnalyzeLog(
+                    log,
+                    List.of(),
+                    chunk -> sseEmitterSupport.sendData(emitter, chunk),
+                    () -> sseEmitterSupport.completeWithDone(emitter)
+            ));
 
-        return emitter;
-    }
-
-    private String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+            return emitter;
         }
-        return request.getRemoteAddr();
     }
 }

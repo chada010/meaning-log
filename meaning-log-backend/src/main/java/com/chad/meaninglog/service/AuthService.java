@@ -14,6 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Locale;
+
+import static com.chad.meaninglog.util.EmailNormalizer.normalize;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -22,12 +26,13 @@ public class AuthService {
     private final PasswordHasher passwordHasher;
     private final JwtService jwtService;
     private final EmailVerificationService emailVerificationService;
+    private final LoginAttemptService loginAttemptService;
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
-        String email = normalizeEmail(request.getEmail());
+    public AuthResponse register(RegisterRequest request, String sourceAddress) {
+        String email = normalize(request.getEmail());
 
-        emailVerificationService.verifyCode(email, request.getVerificationCode());
+        emailVerificationService.verifyCode(email, request.getVerificationCode(), sourceAddress);
 
         if (userAccountRepository.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
@@ -45,11 +50,15 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String sourceAddress) {
         String identifier = request.getIdentifier().trim();
+        boolean isEmailIdentifier = identifier.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+        String principal = isEmailIdentifier ? normalize(identifier) : identifier.toLowerCase(Locale.ROOT);
+        loginAttemptService.reserveAttempt(principal, sourceAddress);
+
         UserAccount user;
-        if (identifier.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            user = userAccountRepository.findByEmail(normalizeEmail(identifier))
+        if (isEmailIdentifier) {
+            user = userAccountRepository.findByEmail(principal)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password"));
         } else {
             user = userAccountRepository.findByUsername(identifier)
@@ -60,22 +69,23 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password");
         }
 
+        loginAttemptService.clearFailures(principal, sourceAddress);
         return createAuthResponse(user);
     }
 
     @Transactional
-    public void resetPassword(ResetPasswordRequest request) {
-        UserAccount user = userAccountRepository.findByEmail(normalizeEmail(request.getEmail()))
+    public void resetPassword(ResetPasswordRequest request, String sourceAddress) {
+        String email = normalize(request.getEmail());
+        emailVerificationService.verifyCode(email, request.getVerificationCode(), sourceAddress);
+
+        UserAccount user = userAccountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Email is not registered"));
         user.setPasswordHash(passwordHasher.hash(request.getNewPassword()));
         user.setTokenVersion(user.getTokenVersion() + 1);
+        userAccountRepository.save(user);
     }
 
     public AuthResponse createAuthResponse(UserAccount user) {
         return AuthResponse.from(user, jwtService.generateToken(user));
-    }
-
-    private String normalizeEmail(String email) {
-        return email.trim().toLowerCase();
     }
 }
