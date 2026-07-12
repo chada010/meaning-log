@@ -3,6 +3,7 @@ package com.chad.meaninglog.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -11,6 +12,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.List;
+
+import static com.chad.meaninglog.util.EmailNormalizer.normalize;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +22,14 @@ public class EmailVerificationService {
 
     private static final String CODE_KEY_PREFIX = "email:verify:code:";
     private static final String COOLDOWN_KEY_PREFIX = "email:verify:cooldown:";
+    private static final DefaultRedisScript<Long> CONSUME_CODE_SCRIPT = new DefaultRedisScript<>(
+            "local stored = redis.call('get', KEYS[1])\n"
+                    + "if stored == ARGV[1] then\n"
+                    + "  return redis.call('del', KEYS[1])\n"
+                    + "end\n"
+                    + "return 0",
+            Long.class
+    );
 
     private final StringRedisTemplate redisTemplate;
     private final JavaMailSender mailSender;
@@ -35,16 +47,17 @@ public class EmailVerificationService {
      * 生成并发送 6 位验证码；同一邮箱 60 秒内只能发一次。
      */
     public void sendCode(String email) {
-        String cooldownKey = COOLDOWN_KEY_PREFIX + email;
+        String normalizedEmail = normalize(email);
+        String cooldownKey = COOLDOWN_KEY_PREFIX + normalizedEmail;
         if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "请稍后再试，发送太频繁");
         }
 
         String code = generateCode();
-        sendEmail(email, code);
+        sendEmail(normalizedEmail, code);
 
         // 邮件发送成功后再写入 Redis，避免发送失败时 cooldown 锁住用户
-        redisTemplate.opsForValue().set(CODE_KEY_PREFIX + email, code, Duration.ofSeconds(codeTtlSeconds));
+        redisTemplate.opsForValue().set(CODE_KEY_PREFIX + normalizedEmail, code, Duration.ofSeconds(codeTtlSeconds));
         redisTemplate.opsForValue().set(cooldownKey, "1", Duration.ofSeconds(cooldownSeconds));
     }
 
@@ -52,14 +65,14 @@ public class EmailVerificationService {
      * 校验验证码；正确后立即删除，防止重复使用。
      */
     public void verifyCode(String email, String code) {
-        String stored = redisTemplate.opsForValue().get(CODE_KEY_PREFIX + email);
-        if (stored == null) {
+        Long consumed = redisTemplate.execute(
+                CONSUME_CODE_SCRIPT,
+                List.of(CODE_KEY_PREFIX + normalize(email)),
+                code.trim()
+        );
+        if (!Long.valueOf(1).equals(consumed)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码已过期，请重新发送");
         }
-        if (!stored.equals(code.trim())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码不正确");
-        }
-        redisTemplate.delete(CODE_KEY_PREFIX + email);
     }
 
     private String generateCode() {

@@ -84,7 +84,7 @@ copy meaning-log-backend\application-local.properties.example meaning-log-backen
 copy meaning-log-frontend\.env.local.example meaning-log-frontend\.env.local
 ```
 
-打开 `meaning-log-backend/application-local.properties`，只需填写自己的 DeepSeek Key：
+打开 `meaning-log-backend/application-local.properties`，填写自己的 DeepSeek Key；示例已提供仅供本地开发的 JWT 密钥。生产环境必须设置 `JWT_SECRET`：
 
 ```properties
 app.ai.api-key=your-deepseek-api-key
@@ -165,7 +165,7 @@ npm run dev
 | `DEEPSEEK_API_KEY` | DeepSeek API Key（部署时使用） | 无，必须配置 |
 | `APP_AI_BASE_URL` | AI 接口基地址 | `https://api.deepseek.com/v1` |
 | `APP_AI_MODEL` | AI 模型名 | `deepseek-chat` |
-| `JWT_SECRET` | JWT 密钥 | `meaning-log-dev-secret-change-me-minimum-32-chars` |
+| `JWT_SECRET` | JWT 密钥 | 必须配置；本地可使用 `application-local.properties` 示例值 |
 | `MAIL_HOST` | SMTP Host | `smtp.qq.com` |
 | `MAIL_PORT` | SMTP Port | `465` |
 | `MAIL_USERNAME` | 发信邮箱 | `your-email@qq.com` |

@@ -21,6 +21,7 @@ export interface LoginRequest {
 
 export interface ResetPasswordRequest {
   email: string
+  verificationCode: string
   newPassword: string
 }
 

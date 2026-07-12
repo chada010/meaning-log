@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import static com.chad.meaninglog.util.EmailNormalizer.normalize;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -25,7 +27,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        String email = normalizeEmail(request.getEmail());
+        String email = normalize(request.getEmail());
 
         emailVerificationService.verifyCode(email, request.getVerificationCode());
 
@@ -49,7 +51,7 @@ public class AuthService {
         String identifier = request.getIdentifier().trim();
         UserAccount user;
         if (identifier.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            user = userAccountRepository.findByEmail(normalizeEmail(identifier))
+            user = userAccountRepository.findByEmail(normalize(identifier))
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password"));
         } else {
             user = userAccountRepository.findByUsername(identifier)
@@ -65,7 +67,10 @@ public class AuthService {
 
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
-        UserAccount user = userAccountRepository.findByEmail(normalizeEmail(request.getEmail()))
+        String email = normalize(request.getEmail());
+        emailVerificationService.verifyCode(email, request.getVerificationCode());
+
+        UserAccount user = userAccountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Email is not registered"));
         user.setPasswordHash(passwordHasher.hash(request.getNewPassword()));
         user.setTokenVersion(user.getTokenVersion() + 1);
@@ -73,9 +78,5 @@ public class AuthService {
 
     public AuthResponse createAuthResponse(UserAccount user) {
         return AuthResponse.from(user, jwtService.generateToken(user));
-    }
-
-    private String normalizeEmail(String email) {
-        return email.trim().toLowerCase();
     }
 }

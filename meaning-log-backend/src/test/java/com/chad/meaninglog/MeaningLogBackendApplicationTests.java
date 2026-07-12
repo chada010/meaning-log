@@ -13,7 +13,7 @@ import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(properties = "jwt.secret=meaning-log-test-jwt-secret-at-least-32-characters")
 class MeaningLogBackendApplicationTests {
 
     @Autowired
