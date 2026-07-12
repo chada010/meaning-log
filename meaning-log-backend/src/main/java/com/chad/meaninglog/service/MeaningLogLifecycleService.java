@@ -88,7 +88,7 @@ public class MeaningLogLifecycleService {
 
     @Transactional
     public void delete(UserAccount user, Long id) {
-        MeaningLog meaningLog = meaningLogSupportService.getMeaningLog(user, id);
+        MeaningLog meaningLog = meaningLogSupportService.getMeaningLogForUpdate(user, id);
         meaningLogImageService.deleteImages(meaningLog);
         xiaojiChatService.deleteLogChats(meaningLog);
         meaningLogRepository.delete(meaningLog);

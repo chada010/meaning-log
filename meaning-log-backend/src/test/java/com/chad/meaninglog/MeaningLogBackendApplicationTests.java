@@ -9,6 +9,7 @@ import com.chad.meaninglog.repository.AiChatSessionRepository;
 import com.chad.meaninglog.repository.MeaningLogRepository;
 import com.chad.meaninglog.repository.UserAccountRepository;
 import com.chad.meaninglog.service.MeaningLogLifecycleService;
+import com.chad.meaninglog.service.XiaojiChatService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,6 +36,9 @@ class MeaningLogBackendApplicationTests {
 
     @Autowired
     private AiChatMessageRepository aiChatMessageRepository;
+
+    @Autowired
+    private XiaojiChatService xiaojiChatService;
 
     @Test
     void contextLoads() {
@@ -91,6 +95,7 @@ class MeaningLogBackendApplicationTests {
         aiChatMessageRepository.save(message);
 
         meaningLogLifecycleService.delete(user, log.getId());
+        xiaojiChatService.persistStreamReply(session, "Late stream reply.");
 
         assertThat(meaningLogRepository.selectById(log.getId())).isNull();
         assertThat(aiChatSessionRepository.selectById(session.getId())).isNull();

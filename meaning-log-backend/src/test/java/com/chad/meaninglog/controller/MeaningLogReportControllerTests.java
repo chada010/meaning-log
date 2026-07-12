@@ -88,6 +88,15 @@ class MeaningLogReportControllerTests {
         assertMissingStartDate("/api/logs/ai/report/stream");
     }
 
+    @Test
+    void streamRequestWithNonStringDateReturnsValidationErrorBody() throws Exception {
+        mockMvc.perform(post("/api/logs/ai/daily-summary/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"date\":{}}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Request body is invalid"));
+    }
+
     private void assertInvalidDateRange(String path) throws Exception {
         var request = post(path).contentType(MediaType.APPLICATION_JSON);
         if (path.endsWith("/stream")) {

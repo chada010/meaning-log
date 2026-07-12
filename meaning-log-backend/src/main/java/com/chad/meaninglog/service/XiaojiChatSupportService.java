@@ -128,6 +128,11 @@ public class XiaojiChatSupportService {
     }
 
     @Transactional
+    public boolean lockLogForStreamReply(Long logId) {
+        return meaningLogRepository.findByIdForUpdate(logId).isPresent();
+    }
+
+    @Transactional
     public void deleteLogChats(MeaningLog log) {
         messageRepository.deleteByMeaningLogId(log.getId());
         sessionRepository.deleteByMeaningLog(log);

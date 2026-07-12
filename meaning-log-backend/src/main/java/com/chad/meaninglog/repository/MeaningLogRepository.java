@@ -42,6 +42,18 @@ public interface MeaningLogRepository extends BaseMapper<MeaningLog> {
         return Optional.ofNullable(selectOne(baseUserQuery(user).eq(MeaningLog::getId, id)));
     }
 
+    default Optional<MeaningLog> findByIdAndUserForUpdate(Long id, UserAccount user) {
+        return Optional.ofNullable(selectOne(baseUserQuery(user)
+                .eq(MeaningLog::getId, id)
+                .last("FOR UPDATE")));
+    }
+
+    default Optional<MeaningLog> findByIdForUpdate(Long id) {
+        return Optional.ofNullable(selectOne(new LambdaQueryWrapper<MeaningLog>()
+                .eq(MeaningLog::getId, id)
+                .last("FOR UPDATE")));
+    }
+
     default MeaningLog save(MeaningLog log) {
         if (log.getId() == null) {
             insert(log);

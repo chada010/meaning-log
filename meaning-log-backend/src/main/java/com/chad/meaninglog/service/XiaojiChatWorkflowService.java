@@ -149,6 +149,10 @@ public class XiaojiChatWorkflowService {
 
     @Transactional
     public void persistStreamReply(AiChatSession session, String reply) {
+        if (session.getMeaningLogId() != null
+                && !xiaojiChatSupportService.lockLogForStreamReply(session.getMeaningLogId())) {
+            return;
+        }
         xiaojiChatSupportService.saveMessage(session, AiChatMessage.Role.ASSISTANT, reply);
     }
 
