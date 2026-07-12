@@ -8,6 +8,7 @@ import com.chad.meaninglog.service.EmailVerificationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -66,11 +67,23 @@ class AuthControllerTests {
         verify(authService).resetPassword(request, "198.51.101.10");
     }
 
+    @Test
+    void rejectsTrustedProxyRangesInsteadOfDedicatedProxyAddresses() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ClientAddressResolver("0.0.0.0/0"));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ClientAddressResolver("::/0"));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ClientAddressResolver("10.0.0.0/8"));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new ClientAddressResolver("2001:db8::/64"));
+    }
+
     private AuthController controller(AuthService authService) {
         return new AuthController(
                 authService,
                 mock(EmailVerificationService.class),
-                new ClientAddressResolver("198.51.100.0/24,10.0.0.0/8")
+                new ClientAddressResolver("198.51.100.10/32,10.0.0.2/32")
         );
     }
 

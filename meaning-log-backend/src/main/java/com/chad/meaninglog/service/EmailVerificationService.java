@@ -89,16 +89,23 @@ public class EmailVerificationService {
     public void sendCode(String email) {
         String normalizedEmail = normalize(email);
         String cooldownKey = COOLDOWN_KEY_PREFIX + normalizedEmail;
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+        Boolean cooldownReserved = redisTemplate.opsForValue().setIfAbsent(
+                cooldownKey,
+                "1",
+                Duration.ofSeconds(cooldownSeconds)
+        );
+        if (!Boolean.TRUE.equals(cooldownReserved)) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "请稍后再试，发送太频繁");
         }
 
-        String code = generateCode();
-        sendEmail(normalizedEmail, code);
-
-        // 邮件发送成功后再写入 Redis，避免发送失败时 cooldown 锁住用户
-        redisTemplate.opsForValue().set(CODE_KEY_PREFIX + normalizedEmail, code, Duration.ofSeconds(codeTtlSeconds));
-        redisTemplate.opsForValue().set(cooldownKey, "1", Duration.ofSeconds(cooldownSeconds));
+        try {
+            String code = generateCode();
+            sendEmail(normalizedEmail, code);
+            redisTemplate.opsForValue().set(CODE_KEY_PREFIX + normalizedEmail, code, Duration.ofSeconds(codeTtlSeconds));
+        } catch (RuntimeException ex) {
+            redisTemplate.delete(cooldownKey);
+            throw ex;
+        }
     }
 
     /**

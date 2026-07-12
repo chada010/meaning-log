@@ -184,7 +184,7 @@ $bytes = New-Object byte[] 32
 
 ### 反向代理
 
-部署在 Nginx 或负载均衡器后时，必须将代理所在网络显式配置到 `AUTH_TRUSTED_PROXY_CIDRS`，例如 `10.0.0.0/8,192.168.100.0/24`；不要使用 `0.0.0.0/0`。同时，代理必须追加而非覆盖 `X-Forwarded-For`：
+部署在 Nginx 或负载均衡器后时，必须将每个代理的专用地址显式配置到 `AUTH_TRUSTED_PROXY_CIDRS`，例如 `10.0.0.2/32,192.168.100.4/32`。该配置只接受 IPv4 `/32` 或 IPv6 `/128`，不能配置客户端网段或 `0.0.0.0/0`。同时，代理必须追加而非覆盖 `X-Forwarded-For`：
 
 ```nginx
 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

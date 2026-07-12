@@ -79,8 +79,9 @@ public class ClientAddressResolver {
             }
             try {
                 int prefixLength = Integer.parseInt(parts[1]);
-                if (prefixLength < 0 || prefixLength > address.getAddress().length * Byte.SIZE) {
-                    throw new IllegalArgumentException("Invalid trusted proxy CIDR: " + cidr);
+                int addressLength = address.getAddress().length * Byte.SIZE;
+                if (prefixLength != addressLength) {
+                    throw new IllegalArgumentException("Trusted proxy CIDRs must identify individual proxy addresses: " + cidr);
                 }
                 return new CidrRange(address.getAddress(), prefixLength);
             } catch (NumberFormatException ex) {

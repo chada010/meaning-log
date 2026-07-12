@@ -16,7 +16,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,7 +37,11 @@ class EmailVerificationServiceTests {
         ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
         JavaMailSender mailSender = mock(JavaMailSender.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(redisTemplate.hasKey("email:verify:cooldown:" + EMAIL)).thenReturn(false);
+        when(valueOperations.setIfAbsent(
+                "email:verify:cooldown:" + EMAIL,
+                "1",
+                Duration.ofSeconds(60)
+        )).thenReturn(true);
         EmailVerificationService service = service(redisTemplate, mailSender);
 
         service.sendCode(" Alice@Example.COM ");
@@ -44,7 +50,51 @@ class EmailVerificationServiceTests {
         verify(mailSender).send(messageCaptor.capture());
         assertThat(messageCaptor.getValue().getTo()).containsExactly(EMAIL);
         verify(valueOperations).set(eq(CODE_KEY), any(String.class), eq(Duration.ofSeconds(300)));
-        verify(valueOperations).set("email:verify:cooldown:" + EMAIL, "1", Duration.ofSeconds(60));
+        verify(valueOperations).setIfAbsent(
+                "email:verify:cooldown:" + EMAIL,
+                "1",
+                Duration.ofSeconds(60)
+        );
+        verify(redisTemplate, never()).hasKey("email:verify:cooldown:" + EMAIL);
+    }
+
+    @Test
+    void sendCodeRejectsARequestThatCannotAtomicallyReserveTheCooldown() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        JavaMailSender mailSender = mock(JavaMailSender.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(
+                "email:verify:cooldown:" + EMAIL,
+                "1",
+                Duration.ofSeconds(60)
+        )).thenReturn(false);
+
+        assertThatThrownBy(() -> service(redisTemplate, mailSender).sendCode(EMAIL))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+        verify(valueOperations, never()).set(eq(CODE_KEY), any(String.class), any(Duration.class));
+    }
+
+    @Test
+    void sendCodeReleasesTheCooldownWhenDeliveryFails() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        JavaMailSender mailSender = mock(JavaMailSender.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(
+                "email:verify:cooldown:" + EMAIL,
+                "1",
+                Duration.ofSeconds(60)
+        )).thenReturn(true);
+        doThrow(new IllegalStateException("SMTP unavailable"))
+                .when(mailSender).send(any(SimpleMailMessage.class));
+
+        assertThatThrownBy(() -> service(redisTemplate, mailSender).sendCode(EMAIL))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(redisTemplate).delete("email:verify:cooldown:" + EMAIL);
     }
 
     @Test
