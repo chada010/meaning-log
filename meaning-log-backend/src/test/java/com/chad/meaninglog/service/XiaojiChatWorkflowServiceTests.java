@@ -90,4 +90,29 @@ class XiaojiChatWorkflowServiceTests {
         inOrder.verify(supportService).saveMessage(eq(session), eq(AiChatMessage.Role.ASSISTANT), anyString());
         verify(supportService, never()).getMeaningLog(user, 66L);
     }
+
+    @Test
+    void prepareLogRefineStreamLocksLogBeforePersistingUserMessage() {
+        XiaojiChatSupportService supportService = mock(XiaojiChatSupportService.class);
+        XiaojiChatWorkflowService service = new XiaojiChatWorkflowService(
+                mock(XiaojiChatQueryService.class),
+                supportService,
+                mock(AiService.class),
+                mock(AiRateLimiter.class)
+        );
+        UserAccount user = new UserAccount();
+        MeaningLog log = new MeaningLog();
+        AiChatSession session = new AiChatSession();
+        when(supportService.getMeaningLogForUpdate(user, 66L)).thenReturn(log);
+        when(supportService.getOrCreateLogSession(user, log)).thenReturn(session);
+        when(supportService.buildRecentTurns(session)).thenReturn(List.of());
+        when(supportService.findLogImages(log)).thenReturn(List.of());
+
+        service.prepareLogRefineStream(user, 66L, "Prepare stream reply.");
+
+        InOrder inOrder = inOrder(supportService);
+        inOrder.verify(supportService).getMeaningLogForUpdate(user, 66L);
+        inOrder.verify(supportService).saveMessage(session, AiChatMessage.Role.USER, "Prepare stream reply.");
+        verify(supportService, never()).getMeaningLog(user, 66L);
+    }
 }

@@ -182,6 +182,45 @@ class LogChatLockConcurrencyIntegrationTests {
         }
     }
 
+    @Test
+    void streamPreparationAcquiresProductionLockBeforeDeleteCanProceed() throws Exception {
+        LogChatFixture fixture = createLogChat();
+        CountDownLatch streamLocked = new CountDownLatch(1);
+        CountDownLatch releaseStream = new CountDownLatch(1);
+        CountDownLatch deleteFinished = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        doAnswer(invocation -> {
+            MeaningLog log = (MeaningLog) invocation.callRealMethod();
+            streamLocked.countDown();
+            await(releaseStream);
+            return log;
+        }).when(xiaojiChatSupportService).getMeaningLogForUpdate(fixture.user(), fixture.log().getId());
+
+        try {
+            Future<?> stream = executor.submit(
+                    () -> xiaojiChatService.prepareLogRefineStream(
+                            fixture.user(), fixture.log().getId(), "Prepare stream reply."
+                    )
+            );
+            assertThat(streamLocked.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> delete = executor.submit(() -> {
+                meaningLogLifecycleService.delete(fixture.user(), fixture.log().getId());
+                deleteFinished.countDown();
+            });
+            assertThat(deleteFinished.await(BLOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)).isFalse();
+
+            releaseStream.countDown();
+            stream.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            delete.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+            assertLogChatDeleted(fixture);
+        } finally {
+            releaseStream.countDown();
+            shutdownExecutor(executor);
+        }
+    }
+
     private LogChatFixture createLogChat() {
         String suffix = UUID.randomUUID().toString();
         UserAccount user = new UserAccount();

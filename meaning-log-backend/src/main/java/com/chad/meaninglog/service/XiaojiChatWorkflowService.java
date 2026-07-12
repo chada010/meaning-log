@@ -107,7 +107,7 @@ public class XiaojiChatWorkflowService {
     @Transactional
     public XiaojiChatService.LogRefineStreamContext prepareLogRefineStream(UserAccount user, Long logId, String userMessage) {
         aiRateLimiter.check(user);
-        MeaningLog log = xiaojiChatSupportService.getMeaningLog(user, logId);
+        MeaningLog log = xiaojiChatSupportService.getMeaningLogForUpdate(user, logId);
         AiChatSession session = xiaojiChatSupportService.getOrCreateLogSession(user, log);
         List<OpenAiClient.ChatTurn> history = xiaojiChatSupportService.buildRecentTurns(session);
         List<LogImage> images = xiaojiChatSupportService.findLogImages(log);
