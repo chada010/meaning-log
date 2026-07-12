@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: meaning-log-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: meaning-log-frontend/package-lock.json
+      - run: npm ci
+      - run: npm run type-check
+      - run: npm run build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: meaning-log-backend
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: meaning_log
+          MYSQL_USER: meaning_log
+          MYSQL_PASSWORD: meaning-log-ci-password
+          MYSQL_ROOT_PASSWORD: meaning-log-ci-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pmeaning-log-ci-root-password --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - run: ./mvnw test
+        env:
+          MYSQLHOST: 127.0.0.1
+          MYSQLPORT: 3306
+          MYSQLDATABASE: meaning_log
+          MYSQLUSER: meaning_log
+          DB_PASSWORD: meaning-log-ci-password
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          DEEPSEEK_API_KEY: ci-not-a-real-key
+          JWT_SECRET: meaning-log-ci-jwt-secret-at-least-32-chars

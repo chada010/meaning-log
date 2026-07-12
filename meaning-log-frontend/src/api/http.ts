@@ -60,7 +60,7 @@ const isAiDependencyError = (error: AxiosError, responseMessage?: string) => {
   return (
     status === 502 ||
     status === 503 ||
-    /AI|Redis|rate limiter|DASHSCOPE|OpenAI|api key/i.test(message)
+    /AI|Redis|rate limiter|DeepSeek|OpenAI|api key/i.test(message)
   )
 }
 

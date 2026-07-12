@@ -23,7 +23,10 @@ dist/
 # ===== Environment / Secrets =====
 .env
 .env.*
+!.env.example
+!meaning-log-frontend/.env.local.example
 application-local.properties
+application-docker.properties
 application-prod.properties
 
 # ===== OS =====
@@ -35,3 +38,6 @@ Thumbs.db
 
 # ===== Claude Code =====
 .claude/
+
+# ===== Codex local task state =====
+.codex/
