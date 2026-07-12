@@ -65,12 +65,14 @@ public class JwtService {
     }
 
     public boolean isValid(String token, UserAccount user) {
+        if (!hasValidSignature(token)) {
+            return false;
+        }
         String email = extractEmail(token);
         return email != null
                 && email.equals(user.getEmail())
                 && hasCurrentTokenVersion(token, user)
-                && !isExpired(token)
-                && hasValidSignature(token);
+                && !isExpired(token);
     }
 
     private boolean hasCurrentTokenVersion(String token, UserAccount user) {
@@ -87,7 +89,7 @@ public class JwtService {
         return Instant.now().getEpochSecond() >= number.longValue();
     }
 
-    private boolean hasValidSignature(String token) {
+    public boolean hasValidSignature(String token) {
         String[] parts = token.split("\\.");
         if (parts.length != 3) {
             return false;

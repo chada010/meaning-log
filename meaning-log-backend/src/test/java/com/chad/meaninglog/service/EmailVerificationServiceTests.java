@@ -149,7 +149,7 @@ class EmailVerificationServiceTests {
 
     @Test
     @SuppressWarnings("unchecked")
-    void verificationScriptChecksTheAttemptLimitBeforeAcceptingACode() {
+    void verificationScriptAcceptsAMatchingCodeBeforeCheckingAttemptLimits() {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         when(redisTemplate.execute(
                 any(RedisScript.class),
@@ -170,8 +170,8 @@ class EmailVerificationServiceTests {
                 eq("20")
         );
         String script = scriptCaptor.getValue().getScriptAsString();
-        assertThat(script.indexOf("local attemptState = redis.call('get', KEYS[2])"))
-                .isLessThan(script.indexOf("if stored == ARGV[1] then"));
+        assertThat(script.indexOf("if stored == ARGV[1] then"))
+                .isLessThan(script.indexOf("local sourceAttempts = attemptCount(KEYS[2], stored)"));
     }
 
     @Test

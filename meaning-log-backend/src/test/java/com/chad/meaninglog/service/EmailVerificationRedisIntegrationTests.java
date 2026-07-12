@@ -86,20 +86,18 @@ class EmailVerificationRedisIntegrationTests {
     }
 
     @Test
-    void attemptsAreLimitedPerResolvedClientAddress() {
+    void matchingCodeRemainsAcceptedAfterSourceAttemptLimit() {
         storeCode("123456");
         for (int attempt = 0; attempt < 5; attempt++) {
             assertThatThrownBy(() -> service.verifyCode(EMAIL, "000000", SOURCE_A))
                     .isInstanceOf(ResponseStatusException.class);
         }
 
-        assertThatThrownBy(() -> service.verifyCode(EMAIL, "123456", SOURCE_A))
-                .isInstanceOf(ResponseStatusException.class);
-        service.verifyCode(EMAIL, "123456", SOURCE_B);
+        service.verifyCode(EMAIL, "123456", SOURCE_A);
     }
 
     @Test
-    void attemptsFromDifferentClientAddressesShareTheCodeTotalLimit() {
+    void matchingCodeRemainsAcceptedAfterDistributedAttemptLimit() {
         service = service(redisTemplate, 5);
         storeCode("123456");
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -111,8 +109,7 @@ class EmailVerificationRedisIntegrationTests {
                     .isInstanceOf(ResponseStatusException.class);
         }
 
-        assertThatThrownBy(() -> service.verifyCode(EMAIL, "123456", "198.51.100.12"))
-                .isInstanceOf(ResponseStatusException.class);
+        service.verifyCode(EMAIL, "123456", "198.51.100.12");
     }
 
     @Test

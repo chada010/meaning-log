@@ -21,8 +21,7 @@ class LoginAttemptServiceTests {
     private static final String SOURCE = "198.51.100.10";
     private static final List<String> ATTEMPT_KEYS = List.of(
             "auth:login:attempts:source:" + SOURCE,
-            "auth:login:attempts:principal-source:" + PRINCIPAL + ":" + SOURCE,
-            "auth:login:attempts:principal:" + PRINCIPAL
+            "auth:login:attempts:principal-source:" + PRINCIPAL + ":" + SOURCE
     );
 
     @Test
@@ -34,8 +33,7 @@ class LoginAttemptServiceTests {
                 eq(ATTEMPT_KEYS),
                 eq("900"),
                 eq("20"),
-                eq("5"),
-                eq("50")
+                eq("5")
         )).thenReturn(0L);
         LoginAttemptService service = service(redisTemplate);
 
@@ -59,7 +57,6 @@ class LoginAttemptServiceTests {
         ReflectionTestUtils.setField(service, "windowSeconds", 900L);
         ReflectionTestUtils.setField(service, "maxAttemptsPerSource", 20);
         ReflectionTestUtils.setField(service, "maxAttemptsPerPrincipalSource", 5);
-        ReflectionTestUtils.setField(service, "maxAttemptsPerPrincipal", 50);
         return service;
     }
 }

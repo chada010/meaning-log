@@ -41,6 +41,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authorization.substring("Bearer ".length()).trim();
+        if (!jwtService.hasValidSignature(token)) {
+            writeUnauthorized(response, "登录状态已过期，请重新登录");
+            return;
+        }
         String email = jwtService.extractEmail(token);
         if (email == null) {
             writeUnauthorized(response, "登录状态已过期，请重新登录");

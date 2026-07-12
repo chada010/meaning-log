@@ -171,7 +171,6 @@ npm run dev
 | `AUTH_LOGIN_ATTEMPT_WINDOW_SECONDS` | 登录失败限流窗口（秒） | `900` |
 | `AUTH_LOGIN_MAX_ATTEMPTS_PER_SOURCE` | 单来源登录尝试次数上限 | `20` / 15 分钟 |
 | `AUTH_LOGIN_MAX_ATTEMPTS_PER_PRINCIPAL_SOURCE` | 单账号单来源登录尝试次数上限 | `5` / 15 分钟 |
-| `AUTH_LOGIN_MAX_ATTEMPTS_PER_PRINCIPAL` | 单账号跨来源登录尝试次数上限 | `50` / 15 分钟 |
 | `MAIL_HOST` | SMTP Host | `smtp.qq.com` |
 | `MAIL_PORT` | SMTP Port | `465` |
 | `MAIL_USERNAME` | 发信邮箱 | `your-email@qq.com` |

@@ -28,8 +28,7 @@ class LoginAttemptRedisIntegrationTests {
     private static final String SOURCE = "198.51.100.10";
     private static final List<String> ATTEMPT_KEYS = List.of(
             "auth:login:attempts:source:" + SOURCE,
-            "auth:login:attempts:principal-source:" + PRINCIPAL + ":" + SOURCE,
-            "auth:login:attempts:principal:" + PRINCIPAL
+            "auth:login:attempts:principal-source:" + PRINCIPAL + ":" + SOURCE
     );
 
     @Container
@@ -55,7 +54,7 @@ class LoginAttemptRedisIntegrationTests {
 
     @Test
     void simultaneousAttemptsReserveOnlyOneSourceQuota() throws Exception {
-        LoginAttemptService service = service(1, 5, 5);
+        LoginAttemptService service = service(1, 5);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
@@ -71,25 +70,22 @@ class LoginAttemptRedisIntegrationTests {
     }
 
     @Test
-    void successfulLoginClearsSourceAndPrincipalAttemptState() {
-        LoginAttemptService service = service(20, 5, 50);
+    void successfulLoginClearsSourceAndPrincipalSourceAttemptState() {
+        LoginAttemptService service = service(20, 5);
         service.reserveAttempt(PRINCIPAL, SOURCE);
 
         service.clearFailures(PRINCIPAL, SOURCE);
 
         assertThat(redisTemplate.hasKey(ATTEMPT_KEYS.get(0))).isFalse();
         assertThat(redisTemplate.hasKey(ATTEMPT_KEYS.get(1))).isFalse();
-        assertThat(redisTemplate.hasKey(ATTEMPT_KEYS.get(2))).isFalse();
     }
 
     @Test
-    void limitsDistributedAttemptsAgainstOnePrincipal() {
-        LoginAttemptService service = service(20, 5, 2);
+    void attemptsFromDifferentSourcesDoNotLockThePrincipal() {
+        LoginAttemptService service = service(20, 5);
         service.reserveAttempt(PRINCIPAL, SOURCE);
         service.reserveAttempt(PRINCIPAL, "198.51.100.11");
-
-        assertThatThrownBy(() -> service.reserveAttempt(PRINCIPAL, "198.51.100.12"))
-                .isInstanceOf(ResponseStatusException.class);
+        service.reserveAttempt(PRINCIPAL, "198.51.100.12");
     }
 
     private boolean reserveAfterStart(LoginAttemptService service, CountDownLatch start) throws InterruptedException {
@@ -104,14 +100,12 @@ class LoginAttemptRedisIntegrationTests {
 
     private LoginAttemptService service(
             int maxAttemptsPerSource,
-            int maxAttemptsPerPrincipalSource,
-            int maxAttemptsPerPrincipal
+            int maxAttemptsPerPrincipalSource
     ) {
         LoginAttemptService service = new LoginAttemptService(redisTemplate);
         ReflectionTestUtils.setField(service, "windowSeconds", 900L);
         ReflectionTestUtils.setField(service, "maxAttemptsPerSource", maxAttemptsPerSource);
         ReflectionTestUtils.setField(service, "maxAttemptsPerPrincipalSource", maxAttemptsPerPrincipalSource);
-        ReflectionTestUtils.setField(service, "maxAttemptsPerPrincipal", maxAttemptsPerPrincipal);
         return service;
     }
 }
