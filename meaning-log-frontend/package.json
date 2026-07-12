@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --experimental-loader ./test-loader.mjs --experimental-strip-types --test src/api/stream.test.ts",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview"
