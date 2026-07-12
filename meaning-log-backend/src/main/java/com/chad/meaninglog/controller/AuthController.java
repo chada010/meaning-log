@@ -7,6 +7,7 @@ import com.chad.meaninglog.dto.ResetPasswordRequest;
 import com.chad.meaninglog.dto.SendCodeRequest;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.service.AuthService;
+import com.chad.meaninglog.service.ClientAddressResolver;
 import com.chad.meaninglog.service.EmailVerificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -30,6 +31,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
+    private final ClientAddressResolver clientAddressResolver;
 
     @PostMapping("/send-code")
     public void sendCode(@Valid @RequestBody SendCodeRequest request) {
@@ -38,7 +40,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public AuthResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest servletRequest) {
-        return authService.register(request, servletRequest.getRemoteAddr());
+        return authService.register(request, clientAddressResolver.resolve(servletRequest));
     }
 
     @PostMapping("/login")
@@ -48,7 +50,7 @@ public class AuthController {
 
     @PostMapping("/reset-password")
     public void resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletRequest servletRequest) {
-        authService.resetPassword(request, servletRequest.getRemoteAddr());
+        authService.resetPassword(request, clientAddressResolver.resolve(servletRequest));
     }
 
     @GetMapping("/me")

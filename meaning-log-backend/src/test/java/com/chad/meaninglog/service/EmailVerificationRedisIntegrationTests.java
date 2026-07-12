@@ -61,7 +61,7 @@ class EmailVerificationRedisIntegrationTests {
     }
 
     @Test
-    void attemptsAreLimitedPerSourceAndResetWhenTheCodeChanges() {
+    void attemptsAreLimitedPerResolvedClientAddress() {
         storeCode("123456");
         for (int attempt = 0; attempt < 5; attempt++) {
             assertThatThrownBy(() -> service.verifyCode(EMAIL, "000000", SOURCE_A))
@@ -71,7 +71,13 @@ class EmailVerificationRedisIntegrationTests {
         assertThatThrownBy(() -> service.verifyCode(EMAIL, "123456", SOURCE_A))
                 .isInstanceOf(ResponseStatusException.class);
         service.verifyCode(EMAIL, "123456", SOURCE_B);
+    }
 
+    @Test
+    void attemptStateDoesNotApplyToANewCode() {
+        storeCode("123456");
+        assertThatThrownBy(() -> service.verifyCode(EMAIL, "000000", SOURCE_A))
+                .isInstanceOf(ResponseStatusException.class);
         storeCode("654321");
         service.verifyCode(EMAIL, "654321", SOURCE_A);
         assertThat(redisTemplate.hasKey(CODE_KEY)).isFalse();

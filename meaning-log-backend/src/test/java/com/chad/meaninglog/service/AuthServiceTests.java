@@ -50,6 +50,7 @@ class AuthServiceTests {
         inOrder.verify(verificationService).verifyCode("alice@example.com", "123456", "198.51.100.10");
         inOrder.verify(repository).findByEmail("alice@example.com");
         inOrder.verify(passwordHasher).hash("new-password");
+        inOrder.verify(repository).save(user);
         assertThat(user.getPasswordHash()).isEqualTo("new-hash");
         assertThat(user.getTokenVersion()).isEqualTo(4);
     }

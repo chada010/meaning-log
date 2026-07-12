@@ -1,8 +1,11 @@
 package com.chad.meaninglog.configuration;
 
+import com.chad.meaninglog.security.JwtService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +18,7 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JwtConfigurationTests {
 
@@ -38,7 +42,22 @@ class JwtConfigurationTests {
     @Test
     void defaultConfigurationRequiresJwtSecretFromTheEnvironment() throws IOException {
         Properties properties = loadProperties(Path.of("src/main/resources/application.properties"));
-        assertThat(properties.getProperty("jwt.secret")).isEqualTo("${JWT_SECRET}");
+        assertThat(properties.getProperty("jwt.secret")).isEqualTo("${JWT_SECRET:}");
+    }
+
+    @Test
+    void applicationFailsAtStartupWhenJwtSecretIsBlank() throws IOException {
+        assertThatThrownBy(() -> runJwtServiceWithSecret(""))
+                .isInstanceOf(BeanCreationException.class)
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasRootCauseMessage("JWT secret must be at least 32 bytes");
+    }
+
+    @Test
+    void applicationStartsWhenJwtSecretMeetsTheMinimumLength() throws IOException {
+        try (ConfigurableApplicationContext context = runJwtServiceWithSecret("a".repeat(32))) {
+            assertThat(context.getBean(JwtService.class)).isNotNull();
+        }
     }
 
     private ConfigurableApplicationContext runWithProfile(String profile) throws IOException {
@@ -69,12 +88,39 @@ class JwtConfigurationTests {
         return properties;
     }
 
+    private ConfigurableApplicationContext runJwtServiceWithSecret(String secret) throws IOException {
+        Path applicationConfig = configDirectory.resolve("jwt-application.properties");
+        Files.writeString(applicationConfig, "jwt.secret=" + secret + "\njwt.expiration-ms=86400000\n");
+
+        SpringApplication application = new SpringApplication(JwtServiceConfiguration.class);
+        application.setWebApplicationType(WebApplicationType.NONE);
+        return application.run(
+                "--spring.config.location=" + applicationConfig.toUri(),
+                "--jwt.secret=" + secret
+        );
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class JwtPropertyConfiguration {
 
         @Bean
         String configuredSecret(@Value("${test.jwt.secret}") String secret) {
             return secret;
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class JwtServiceConfiguration {
+
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
+
+        @Bean
+        JwtService jwtService(ObjectMapper objectMapper, @Value("${jwt.secret}") String secret,
+                              @Value("${jwt.expiration-ms}") long expirationMs) {
+            return new JwtService(objectMapper, secret, expirationMs);
         }
     }
 }

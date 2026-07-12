@@ -74,6 +74,7 @@ public class AuthService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Email is not registered"));
         user.setPasswordHash(passwordHasher.hash(request.getNewPassword()));
         user.setTokenVersion(user.getTokenVersion() + 1);
+        userAccountRepository.save(user);
     }
 
     public AuthResponse createAuthResponse(UserAccount user) {

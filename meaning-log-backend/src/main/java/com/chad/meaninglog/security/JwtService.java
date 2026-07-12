@@ -18,6 +18,7 @@ import java.util.Map;
 @Service
 public class JwtService {
 
+    private static final int MINIMUM_SECRET_BYTES = 32;
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
@@ -33,7 +34,7 @@ public class JwtService {
             @Value("${jwt.expiration-ms}") long expirationMs
     ) {
         this.objectMapper = objectMapper;
-        this.secret = secret.getBytes(StandardCharsets.UTF_8);
+        this.secret = validateSecret(secret);
         this.expirationMs = expirationMs;
     }
 
@@ -127,5 +128,15 @@ public class JwtService {
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to sign JWT", ex);
         }
+    }
+
+    private byte[] validateSecret(String configuredSecret) {
+        byte[] secretBytes = configuredSecret == null
+                ? new byte[0]
+                : configuredSecret.trim().getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < MINIMUM_SECRET_BYTES) {
+            throw new IllegalArgumentException("JWT secret must be at least 32 bytes");
+        }
+        return secretBytes;
     }
 }
