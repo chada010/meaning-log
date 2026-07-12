@@ -73,9 +73,9 @@ public class OpenAiClient {
     public OpenAiClient(
             RestClient.Builder restClientBuilder,
             ObjectMapper objectMapper,
-            @Value("${ai.api-key:}") String apiKey,
-            @Value("${ai.base-url:https://dashscope.aliyuncs.com/compatible-mode/v1}") String baseUrl,
-            @Value("${ai.model:qwen-plus}") String model
+            @Value("${app.ai.api-key:}") String apiKey,
+            @Value("${app.ai.base-url:https://api.deepseek.com/v1}") String baseUrl,
+            @Value("${app.ai.model:deepseek-chat}") String model
     ) {
         this.restClient = restClientBuilder.baseUrl(baseUrl).build();
         this.objectMapper = objectMapper;
@@ -560,7 +560,7 @@ public class OpenAiClient {
         if (apiKey == null || apiKey.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "AI API key is not configured. Please set DASHSCOPE_API_KEY before starting the backend."
+                    "AI API key is not configured. Please set DEEPSEEK_API_KEY before starting the backend."
             );
         }
     }

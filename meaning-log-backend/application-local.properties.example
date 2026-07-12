@@ -1,0 +1,4 @@
+# Copy this file to application-local.properties for local development.
+# application-local.properties is ignored by Git.
+app.ai.api-key=your-deepseek-api-key
+jwt.secret=replace-with-a-local-secret-of-at-least-32-characters
