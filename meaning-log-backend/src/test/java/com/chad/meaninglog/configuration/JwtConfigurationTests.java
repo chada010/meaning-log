@@ -15,12 +15,15 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JwtConfigurationTests {
+
+    private static final String VALID_JWT_SECRET = "Z3J5bEJ4L2lxanFQU0xJMzVGcFhTc0cwWFFUTzVaWlNkRTY=";
 
     @TempDir
     Path configDirectory;
@@ -50,12 +53,43 @@ class JwtConfigurationTests {
         assertThatThrownBy(() -> runJwtServiceWithSecret(""))
                 .isInstanceOf(BeanCreationException.class)
                 .hasRootCauseInstanceOf(IllegalArgumentException.class)
-                .hasRootCauseMessage("JWT secret must be at least 32 bytes");
+                .hasRootCauseMessage("JWT secret must decode to at least 32 bytes");
     }
 
     @Test
-    void applicationStartsWhenJwtSecretMeetsTheMinimumLength() throws IOException {
-        try (ConfigurableApplicationContext context = runJwtServiceWithSecret("a".repeat(32))) {
+    void applicationFailsAtStartupWhenJwtSecretIsNotBase64Encoded() {
+        assertThatThrownBy(() -> runJwtServiceWithSecret("!".repeat(32)))
+                .isInstanceOf(BeanCreationException.class)
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasRootCauseMessage("JWT secret must be Base64 encoded");
+    }
+
+    @Test
+    void applicationFailsAtStartupWhenJwtSecretDecodesToFewerThanThirtyTwoBytes() {
+        assertThatThrownBy(() -> runJwtServiceWithSecret(Base64.getEncoder().encodeToString(new byte[31])))
+                .isInstanceOf(BeanCreationException.class)
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasRootCauseMessage("JWT secret must decode to at least 32 bytes");
+    }
+
+    @Test
+    void applicationFailsAtStartupWhenJwtSecretContainsOnlyRepeatedBytes() {
+        assertThatThrownBy(() -> runJwtServiceWithSecret(Base64.getEncoder().encodeToString(new byte[32])))
+                .isInstanceOf(BeanCreationException.class)
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasRootCauseMessage("JWT secret must not contain only repeated bytes");
+    }
+
+    @Test
+    void localJwtSecretSampleIsBase64EncodedAndLongEnough() throws IOException {
+        Properties properties = loadProperties(Path.of("application-local.properties.example"));
+
+        assertThat(Base64.getDecoder().decode(properties.getProperty("jwt.secret"))).hasSizeGreaterThanOrEqualTo(32);
+    }
+
+    @Test
+    void applicationStartsWhenJwtSecretIsBase64EncodedAndStrongEnough() throws IOException {
+        try (ConfigurableApplicationContext context = runJwtServiceWithSecret(VALID_JWT_SECRET)) {
             assertThat(context.getBean(JwtService.class)).isNotNull();
         }
     }

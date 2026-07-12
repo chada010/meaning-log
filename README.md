@@ -84,7 +84,7 @@ copy meaning-log-backend\application-local.properties.example meaning-log-backen
 copy meaning-log-frontend\.env.local.example meaning-log-frontend\.env.local
 ```
 
-打开 `meaning-log-backend/application-local.properties`，填写自己的 DeepSeek Key；示例已提供仅供本地开发的 JWT 密钥。运行本地后端时设置 `SPRING_PROFILES_ACTIVE=local`，生产环境必须设置 `JWT_SECRET`：
+打开 `meaning-log-backend/application-local.properties`，填写自己的 DeepSeek Key；示例已提供仅供本地开发的 JWT 密钥。运行本地后端时设置 `SPRING_PROFILES_ACTIVE=local`，生产环境必须设置 Base64 编码的随机 `JWT_SECRET`：
 
 ```properties
 app.ai.api-key=your-deepseek-api-key
@@ -166,12 +166,31 @@ npm run dev
 | `DEEPSEEK_API_KEY` | DeepSeek API Key（部署时使用） | 无，必须配置 |
 | `APP_AI_BASE_URL` | AI 接口基地址 | `https://api.deepseek.com/v1` |
 | `APP_AI_MODEL` | AI 模型名 | `deepseek-chat` |
-| `JWT_SECRET` | JWT 密钥 | 必须配置；本地可使用 `application-local.properties` 示例值 |
+| `JWT_SECRET` | Base64 编码的随机 JWT 密钥，解码后至少 32 字节 | 必须配置；本地可使用 `application-local.properties` 示例值 |
+| `AUTH_TRUSTED_PROXY_CIDRS` | 可信反向代理 CIDR，多个值以逗号分隔 | 空，仅直连部署 |
 | `MAIL_HOST` | SMTP Host | `smtp.qq.com` |
 | `MAIL_PORT` | SMTP Port | `465` |
 | `MAIL_USERNAME` | 发信邮箱 | `your-email@qq.com` |
 | `MAIL_PASSWORD` | SMTP 授权码 | `your-smtp-authorization-code` |
 | `MAIL_FROM` | 发信人 | `your-email@qq.com` |
+
+生产环境可使用以下 PowerShell 命令生成 JWT 密钥：
+
+```powershell
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
+```
+
+### 反向代理
+
+部署在 Nginx 或负载均衡器后时，必须将代理所在网络显式配置到 `AUTH_TRUSTED_PROXY_CIDRS`，例如 `10.0.0.0/8,192.168.100.0/24`；不要使用 `0.0.0.0/0`。同时，代理必须追加而非覆盖 `X-Forwarded-For`：
+
+```nginx
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+未配置可信 CIDR 时，后端会忽略 `X-Forwarded-For` 并使用直连地址。
 
 ## 验证命令
 

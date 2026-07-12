@@ -131,12 +131,29 @@ public class JwtService {
     }
 
     private byte[] validateSecret(String configuredSecret) {
-        byte[] secretBytes = configuredSecret == null
-                ? new byte[0]
-                : configuredSecret.trim().getBytes(StandardCharsets.UTF_8);
+        String normalizedSecret = configuredSecret == null ? "" : configuredSecret.trim();
+        byte[] secretBytes;
+        try {
+            secretBytes = Base64.getDecoder().decode(normalizedSecret);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("JWT secret must be Base64 encoded");
+        }
         if (secretBytes.length < MINIMUM_SECRET_BYTES) {
-            throw new IllegalArgumentException("JWT secret must be at least 32 bytes");
+            throw new IllegalArgumentException("JWT secret must decode to at least 32 bytes");
+        }
+        if (containsOnlyRepeatedBytes(secretBytes)) {
+            throw new IllegalArgumentException("JWT secret must not contain only repeated bytes");
         }
         return secretBytes;
+    }
+
+    private boolean containsOnlyRepeatedBytes(byte[] secretBytes) {
+        byte firstByte = secretBytes[0];
+        for (int index = 1; index < secretBytes.length; index++) {
+            if (secretBytes[index] != firstByte) {
+                return false;
+            }
+        }
+        return true;
     }
 }

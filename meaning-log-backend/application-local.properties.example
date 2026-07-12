@@ -2,4 +2,4 @@
 # application-local.properties is ignored by Git.
 spring.config.activate.on-profile=local
 app.ai.api-key=your-deepseek-api-key
-jwt.secret=meaning-log-local-jwt-secret-at-least-32-characters
+jwt.secret=Z3J5bEJ4L2lxanFQU0xJMzVGcFhTc0cwWFFUTzVaWlNkRTY=
