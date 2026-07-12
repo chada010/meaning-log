@@ -60,11 +60,21 @@ function dataFromLine(line: string): string {
 
 async function readSse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
-  onData: (event: string, data: string) => boolean,
+  onEvent: (event: string, data: string) => boolean,
 ): Promise<void> {
   const decoder = new TextDecoder()
   let buffer = ''
   let currentEvent = ''
+  let dataLines: string[] = []
+
+  const dispatchEvent = (): boolean => {
+    if (!currentEvent && dataLines.length === 0) return false
+
+    const completed = onEvent(currentEvent, dataLines.join('\n'))
+    currentEvent = ''
+    dataLines = []
+    return completed
+  }
 
   const processLine = (rawLine: string): boolean => {
     const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
@@ -73,10 +83,11 @@ async function readSse(
       return false
     }
     if (line.startsWith('data:')) {
-      return onData(currentEvent, dataFromLine(line))
+      dataLines.push(dataFromLine(line))
+      return false
     }
     if (line === '') {
-      currentEvent = ''
+      return dispatchEvent()
     }
     return false
   }
@@ -101,7 +112,8 @@ async function readSse(
   }
 
   buffer += decoder.decode()
-  if (processDecoded() || (buffer !== '' && processLine(buffer))) return
+  if (processDecoded()) return
+  if (buffer !== '') processLine(buffer)
   throw new StreamFetchError('incomplete', 'SSE stream ended before done event')
 }
 

@@ -46,7 +46,7 @@ beforeEach(() => {
 
 describe('streamFetch', () => {
   it('保留 data 分片中的前后空白，并在 done 后成功', async () => {
-    mockResponse(streamResponse(['data:  leading and trailing  \n\nevent: done\ndata: \n\n']))
+    mockResponse(streamResponse(['data:  leading and trailing  \n\nevent: done\n\n']))
     const chunks: string[] = []
 
     await streamFetch('/chat', {}, (chunk) => chunks.push(chunk))
@@ -54,8 +54,17 @@ describe('streamFetch', () => {
     assert.deepEqual(chunks, [' leading and trailing  '])
   })
 
+  it('按事件边界合并多条 data 行并保留换行', async () => {
+    mockResponse(streamResponse(['data: first line\ndata: second line\n\nevent: done\n\n']))
+    const chunks: string[] = []
+
+    await streamFetch('/chat', {}, (chunk) => chunks.push(chunk))
+
+    assert.deepEqual(chunks, ['first line\nsecond line'])
+  })
+
   it('处理 session 事件后继续读取并在 done 后成功', async () => {
-    mockResponse(streamResponse(['event: session\ndata: {"sessionId":42}\n\ndata: reply\n\nevent: done\ndata: \n\n']))
+    mockResponse(streamResponse(['event: session\ndata: {"sessionId":42}\n\ndata: reply\n\nevent: done\n\n']))
     const sessionIds: number[] = []
     const chunks: string[] = []
 
@@ -88,7 +97,7 @@ describe('streamFetch', () => {
 
 describe('streamFetchJson', () => {
   it('仅在收到 done 后解析并返回 JSON 结果', async () => {
-    mockResponse(streamResponse(['data: {"title":"draft"}\n\nevent: done\ndata: \n\n']))
+    mockResponse(streamResponse(['data: {"title":"draft"}\n\nevent: done\n\n']))
 
     const result = await streamFetchJson<{ title: string }>('/refine', {})
 
