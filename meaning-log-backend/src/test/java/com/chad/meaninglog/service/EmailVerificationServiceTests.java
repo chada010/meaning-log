@@ -24,7 +24,8 @@ class EmailVerificationServiceTests {
 
     private static final String EMAIL = "alice@example.com";
     private static final String CODE_KEY = "email:verify:code:" + EMAIL;
-    private static final String ATTEMPT_KEY = "email:verify:attempts:" + EMAIL;
+    private static final String SOURCE = "198.51.100.10";
+    private static final String ATTEMPT_KEY = "email:verify:attempts:" + EMAIL + ":" + SOURCE;
 
     @Test
     @SuppressWarnings("unchecked")
@@ -43,7 +44,6 @@ class EmailVerificationServiceTests {
         assertThat(messageCaptor.getValue().getTo()).containsExactly(EMAIL);
         verify(valueOperations).set(eq(CODE_KEY), any(String.class), eq(Duration.ofSeconds(300)));
         verify(valueOperations).set("email:verify:cooldown:" + EMAIL, "1", Duration.ofSeconds(60));
-        verify(redisTemplate).delete(ATTEMPT_KEY);
     }
 
     @Test
@@ -59,7 +59,7 @@ class EmailVerificationServiceTests {
         )).thenReturn(1L);
         EmailVerificationService service = service(redisTemplate, mailSender);
 
-        service.verifyCode(" Alice@Example.COM ", " 123456 ");
+        service.verifyCode(" Alice@Example.COM ", " 123456 ", SOURCE);
 
         verify(redisTemplate).execute(
                 any(RedisScript.class),
@@ -81,7 +81,7 @@ class EmailVerificationServiceTests {
         )).thenReturn(-1L);
 
         assertThatThrownBy(() -> service(redisTemplate, mock(JavaMailSender.class))
-                .verifyCode(EMAIL, "123456"))
+                .verifyCode(EMAIL, "123456", SOURCE))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
     }
 
@@ -96,13 +96,39 @@ class EmailVerificationServiceTests {
                 eq("5")
         )).thenReturn(1L);
 
-        service(redisTemplate, mock(JavaMailSender.class)).verifyCode(EMAIL, "123456");
+        service(redisTemplate, mock(JavaMailSender.class)).verifyCode(EMAIL, "123456", SOURCE);
 
         ArgumentCaptor<RedisScript<Long>> scriptCaptor = ArgumentCaptor.forClass(RedisScript.class);
         verify(redisTemplate).execute(scriptCaptor.capture(), eq(List.of(CODE_KEY, ATTEMPT_KEY)), eq("123456"), eq("5"));
         String script = scriptCaptor.getValue().getScriptAsString();
-        assertThat(script.indexOf("local attempts = redis.call('get', KEYS[2])"))
+        assertThat(script.indexOf("local attemptState = redis.call('get', KEYS[2])"))
                 .isLessThan(script.indexOf("if stored == ARGV[1] then"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void verifyCodeUsesASeparateAttemptKeyForEachSource() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        when(redisTemplate.execute(any(RedisScript.class), any(List.class), eq("123456"), eq("5"))).thenReturn(0L);
+        EmailVerificationService service = service(redisTemplate, mock(JavaMailSender.class));
+
+        assertThatThrownBy(() -> service.verifyCode(EMAIL, "123456", "198.51.100.10"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThatThrownBy(() -> service.verifyCode(EMAIL, "123456", "198.51.100.11"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        verify(redisTemplate).execute(
+                any(RedisScript.class),
+                eq(List.of(CODE_KEY, "email:verify:attempts:" + EMAIL + ":198.51.100.10")),
+                eq("123456"),
+                eq("5")
+        );
+        verify(redisTemplate).execute(
+                any(RedisScript.class),
+                eq(List.of(CODE_KEY, "email:verify:attempts:" + EMAIL + ":198.51.100.11")),
+                eq("123456"),
+                eq("5")
+        );
     }
 
     private EmailVerificationService service(StringRedisTemplate redisTemplate, JavaMailSender mailSender) {

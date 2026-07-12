@@ -44,10 +44,10 @@ class AuthServiceTests {
         when(repository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordHasher.hash("new-password")).thenReturn("new-hash");
 
-        service(repository, passwordHasher, verificationService).resetPassword(resetRequest("123456"));
+        service(repository, passwordHasher, verificationService).resetPassword(resetRequest("123456"), "198.51.100.10");
 
         InOrder inOrder = inOrder(verificationService, repository, passwordHasher);
-        inOrder.verify(verificationService).verifyCode("alice@example.com", "123456");
+        inOrder.verify(verificationService).verifyCode("alice@example.com", "123456", "198.51.100.10");
         inOrder.verify(repository).findByEmail("alice@example.com");
         inOrder.verify(passwordHasher).hash("new-password");
         assertThat(user.getPasswordHash()).isEqualTo("new-hash");
@@ -60,10 +60,10 @@ class AuthServiceTests {
         PasswordHasher passwordHasher = mock(PasswordHasher.class);
         EmailVerificationService verificationService = mock(EmailVerificationService.class);
         doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST))
-                .when(verificationService).verifyCode("alice@example.com", "123456");
+                .when(verificationService).verifyCode("alice@example.com", "123456", "198.51.100.10");
 
         assertThatThrownBy(() -> service(repository, passwordHasher, verificationService)
-                .resetPassword(resetRequest("123456")))
+                .resetPassword(resetRequest("123456"), "198.51.100.10"))
                 .isInstanceOf(ResponseStatusException.class);
 
         verifyNoInteractions(repository, passwordHasher);

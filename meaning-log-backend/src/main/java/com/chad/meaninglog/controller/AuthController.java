@@ -8,6 +8,7 @@ import com.chad.meaninglog.dto.SendCodeRequest;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.service.AuthService;
 import com.chad.meaninglog.service.EmailVerificationService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -36,8 +37,8 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        return authService.register(request);
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest servletRequest) {
+        return authService.register(request, servletRequest.getRemoteAddr());
     }
 
     @PostMapping("/login")
@@ -46,8 +47,8 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        authService.resetPassword(request);
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletRequest servletRequest) {
+        authService.resetPassword(request, servletRequest.getRemoteAddr());
     }
 
     @GetMapping("/me")

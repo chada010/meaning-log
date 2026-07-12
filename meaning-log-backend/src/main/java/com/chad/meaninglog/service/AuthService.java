@@ -26,10 +26,10 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request, String sourceAddress) {
         String email = normalize(request.getEmail());
 
-        emailVerificationService.verifyCode(email, request.getVerificationCode());
+        emailVerificationService.verifyCode(email, request.getVerificationCode(), sourceAddress);
 
         if (userAccountRepository.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
@@ -66,9 +66,9 @@ public class AuthService {
     }
 
     @Transactional
-    public void resetPassword(ResetPasswordRequest request) {
+    public void resetPassword(ResetPasswordRequest request, String sourceAddress) {
         String email = normalize(request.getEmail());
-        emailVerificationService.verifyCode(email, request.getVerificationCode());
+        emailVerificationService.verifyCode(email, request.getVerificationCode(), sourceAddress);
 
         UserAccount user = userAccountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Email is not registered"));

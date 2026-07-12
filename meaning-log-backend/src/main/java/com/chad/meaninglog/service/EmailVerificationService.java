@@ -28,8 +28,15 @@ public class EmailVerificationService {
                     + "if not stored then\n"
                     + "  return 0\n"
                     + "end\n"
-                    + "local attempts = redis.call('get', KEYS[2])\n"
-                    + "if attempts and tonumber(attempts) >= tonumber(ARGV[2]) then\n"
+                    + "local attemptState = redis.call('get', KEYS[2])\n"
+                    + "local attempts = 0\n"
+                    + "if attemptState then\n"
+                    + "  local separator = string.find(attemptState, ':')\n"
+                    + "  if separator and string.sub(attemptState, 1, separator - 1) == stored then\n"
+                    + "    attempts = tonumber(string.sub(attemptState, separator + 1)) or 0\n"
+                    + "  end\n"
+                    + "end\n"
+                    + "if attempts >= tonumber(ARGV[2]) then\n"
                     + "  return -1\n"
                     + "end\n"
                     + "if stored == ARGV[1] then\n"
@@ -37,10 +44,10 @@ public class EmailVerificationService {
                     + "  redis.call('del', KEYS[2])\n"
                     + "  return 1\n"
                     + "end\n"
-                    + "local updatedAttempts = redis.call('incr', KEYS[2])\n"
+                    + "local updatedAttempts = attempts + 1\n"
                     + "local ttl = redis.call('ttl', KEYS[1])\n"
                     + "if ttl > 0 then\n"
-                    + "  redis.call('expire', KEYS[2], ttl)\n"
+                    + "  redis.call('set', KEYS[2], stored .. ':' .. updatedAttempts, 'EX', ttl)\n"
                     + "end\n"
                     + "if updatedAttempts >= tonumber(ARGV[2]) then\n"
                     + "  return -1\n"
@@ -79,18 +86,17 @@ public class EmailVerificationService {
 
         // 邮件发送成功后再写入 Redis，避免发送失败时 cooldown 锁住用户
         redisTemplate.opsForValue().set(CODE_KEY_PREFIX + normalizedEmail, code, Duration.ofSeconds(codeTtlSeconds));
-        redisTemplate.delete(ATTEMPT_KEY_PREFIX + normalizedEmail);
         redisTemplate.opsForValue().set(cooldownKey, "1", Duration.ofSeconds(cooldownSeconds));
     }
 
     /**
      * 校验验证码；正确后立即删除，防止重复使用。
      */
-    public void verifyCode(String email, String code) {
+    public void verifyCode(String email, String code, String sourceAddress) {
         String normalizedEmail = normalize(email);
         Long consumed = redisTemplate.execute(
                 CONSUME_CODE_SCRIPT,
-                List.of(CODE_KEY_PREFIX + normalizedEmail, ATTEMPT_KEY_PREFIX + normalizedEmail),
+                List.of(CODE_KEY_PREFIX + normalizedEmail, ATTEMPT_KEY_PREFIX + normalizedEmail + ":" + sourceAddress),
                 code.trim(),
                 String.valueOf(maxVerificationAttempts)
         );
