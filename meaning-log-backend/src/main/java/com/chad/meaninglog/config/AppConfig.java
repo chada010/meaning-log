@@ -1,21 +1,37 @@
 package com.chad.meaninglog.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 public class AppConfig {
 
     /**
-     * SSE 流式推送专用线程池。
-     * SseEmitter 的写入必须在独立线程中执行，不能阻塞 Tomcat 的请求处理线程。
-     * CachedThreadPool 按需创建线程，适合并发量不大的场景。
+     * SSE streaming executor with bounded concurrency and queue capacity.
      */
     @Bean
-    public ExecutorService sseExecutorService() {
-        return Executors.newCachedThreadPool();
+    public ThreadPoolTaskExecutor sseExecutorService(
+            @Value("${app.sse.executor.pool-size:8}") int poolSize,
+            @Value("${app.sse.executor.queue-capacity:32}") int queueCapacity,
+            @Value("${app.sse.executor.shutdown-await-seconds:30}") int shutdownAwaitSeconds
+    ) {
+        if (poolSize < 1 || queueCapacity < 1 || shutdownAwaitSeconds < 0) {
+            throw new IllegalArgumentException("SSE executor properties must use positive pool and queue sizes");
+        }
+
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(poolSize);
+        executor.setMaxPoolSize(poolSize);
+        executor.setQueueCapacity(queueCapacity);
+        executor.setThreadNamePrefix("sse-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(shutdownAwaitSeconds);
+        executor.initialize();
+        return executor;
     }
 }

@@ -18,6 +18,7 @@ import java.util.Map;
 @Service
 public class JwtService {
 
+    private static final int MINIMUM_SECRET_BYTES = 32;
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
@@ -33,7 +34,7 @@ public class JwtService {
             @Value("${jwt.expiration-ms}") long expirationMs
     ) {
         this.objectMapper = objectMapper;
-        this.secret = secret.getBytes(StandardCharsets.UTF_8);
+        this.secret = validateSecret(secret);
         this.expirationMs = expirationMs;
     }
 
@@ -64,12 +65,14 @@ public class JwtService {
     }
 
     public boolean isValid(String token, UserAccount user) {
+        if (!hasValidSignature(token)) {
+            return false;
+        }
         String email = extractEmail(token);
         return email != null
                 && email.equals(user.getEmail())
                 && hasCurrentTokenVersion(token, user)
-                && !isExpired(token)
-                && hasValidSignature(token);
+                && !isExpired(token);
     }
 
     private boolean hasCurrentTokenVersion(String token, UserAccount user) {
@@ -86,7 +89,7 @@ public class JwtService {
         return Instant.now().getEpochSecond() >= number.longValue();
     }
 
-    private boolean hasValidSignature(String token) {
+    public boolean hasValidSignature(String token) {
         String[] parts = token.split("\\.");
         if (parts.length != 3) {
             return false;
@@ -127,5 +130,32 @@ public class JwtService {
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to sign JWT", ex);
         }
+    }
+
+    private byte[] validateSecret(String configuredSecret) {
+        String normalizedSecret = configuredSecret == null ? "" : configuredSecret.trim();
+        byte[] secretBytes;
+        try {
+            secretBytes = Base64.getDecoder().decode(normalizedSecret);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("JWT secret must be Base64 encoded");
+        }
+        if (secretBytes.length < MINIMUM_SECRET_BYTES) {
+            throw new IllegalArgumentException("JWT secret must decode to at least 32 bytes");
+        }
+        if (containsOnlyRepeatedBytes(secretBytes)) {
+            throw new IllegalArgumentException("JWT secret must not contain only repeated bytes");
+        }
+        return secretBytes;
+    }
+
+    private boolean containsOnlyRepeatedBytes(byte[] secretBytes) {
+        byte firstByte = secretBytes[0];
+        for (int index = 1; index < secretBytes.length; index++) {
+            if (secretBytes[index] != firstByte) {
+                return false;
+            }
+        }
+        return true;
     }
 }

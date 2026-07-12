@@ -8,10 +8,13 @@ import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.repository.AiReportRepository;
 import com.chad.meaninglog.repository.MeaningLogRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Service
@@ -26,6 +29,7 @@ public class MeaningLogReportService {
 
     @Transactional
     public AiReportResponse summarizeDay(UserAccount user, LocalDate date) {
+        date = validateDailySummaryDate(date);
         aiRateLimiter.check(user);
         List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
         AiReportResponse response = aiService.summarizeLogs("AI 当天总结", date.toString(), logs);
@@ -34,6 +38,7 @@ public class MeaningLogReportService {
 
     @Transactional
     public AiReportResponse summarizePeriod(UserAccount user, LocalDate startDate, LocalDate endDate, String title) {
+        validateReportDateRange(startDate, endDate);
         aiRateLimiter.check(user);
         List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(user, startDate, endDate);
         AiReportResponse response = aiService.summarizeLogs(title, startDate + " 至 " + endDate, logs);
@@ -67,6 +72,7 @@ public class MeaningLogReportService {
     public MeaningLogService.ReportStreamContext prepareReportStream(
             UserAccount user, LocalDate startDate, LocalDate endDate, String title
     ) {
+        validateReportDateRange(startDate, endDate);
         aiRateLimiter.check(user);
         List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(user, startDate, endDate);
         return new MeaningLogService.ReportStreamContext(
@@ -80,6 +86,7 @@ public class MeaningLogReportService {
 
     @Transactional(readOnly = true)
     public MeaningLogService.ReportStreamContext prepareDailySummaryStream(UserAccount user, LocalDate date) {
+        date = validateDailySummaryDate(date);
         aiRateLimiter.check(user);
         List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
         return new MeaningLogService.ReportStreamContext(logs, date.toString(), AiReport.Type.DAILY, date, date);
@@ -103,6 +110,52 @@ public class MeaningLogReportService {
         report.setSummary(response.getSummary());
         report.setTags(response.getTags());
         return AiReportResponse.from(aiReportRepository.save(report));
+    }
+
+    public LocalDate parseDailySummaryDate(String date) {
+        return validateDailySummaryDate(parseRequiredDate(date, "date"));
+    }
+
+    public MeaningLogService.ReportDateRange parseReportDateRange(String startDate, String endDate) {
+        return validateReportDateRange(
+                parseRequiredDate(startDate, "startDate"),
+                parseRequiredDate(endDate, "endDate")
+        );
+    }
+
+    private LocalDate validateDailySummaryDate(LocalDate date) {
+        if (date == null) {
+            throw badRequest("date is required");
+        }
+        return date;
+    }
+
+    private MeaningLogService.ReportDateRange validateReportDateRange(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null) {
+            throw badRequest("startDate is required");
+        }
+        if (endDate == null) {
+            throw badRequest("endDate is required");
+        }
+        if (startDate.isAfter(endDate)) {
+            throw badRequest("startDate must not be after endDate");
+        }
+        return new MeaningLogService.ReportDateRange(startDate, endDate);
+    }
+
+    private LocalDate parseRequiredDate(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw badRequest(fieldName + " is required");
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException ex) {
+            throw badRequest(fieldName + " must use YYYY-MM-DD format");
+        }
+    }
+
+    private ResponseStatusException badRequest(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
     private AiReport.Type inferReportType(String title) {

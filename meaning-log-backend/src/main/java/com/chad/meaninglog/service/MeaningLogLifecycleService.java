@@ -24,6 +24,7 @@ public class MeaningLogLifecycleService {
     private final MeaningLogRepository meaningLogRepository;
     private final MeaningLogSupportService meaningLogSupportService;
     private final MeaningLogImageService meaningLogImageService;
+    private final XiaojiChatService xiaojiChatService;
 
     @Transactional(readOnly = true)
     public List<MeaningLogResponse> findAll(UserAccount user, LocalDate logDate, String keyword, String tag, Boolean favorite) {
@@ -87,8 +88,9 @@ public class MeaningLogLifecycleService {
 
     @Transactional
     public void delete(UserAccount user, Long id) {
-        MeaningLog meaningLog = meaningLogSupportService.getMeaningLog(user, id);
+        MeaningLog meaningLog = meaningLogSupportService.getMeaningLogForUpdate(user, id);
         meaningLogImageService.deleteImages(meaningLog);
+        xiaojiChatService.deleteLogChats(meaningLog);
         meaningLogRepository.delete(meaningLog);
     }
 

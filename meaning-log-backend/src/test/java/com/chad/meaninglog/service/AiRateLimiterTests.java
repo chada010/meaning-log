@@ -18,7 +18,7 @@ class AiRateLimiterTests {
 
     @Test
     void firstRequestSetsWindowExpiration() {
-        StringRedisTemplate redisTemplate = mockRedisTemplateReturning(1L);
+        StringRedisTemplate redisTemplate = mockRedisTemplateReturning("ai:rate-limit:user:42", 1L);
         AiRateLimiter limiter = limiter(redisTemplate);
 
         limiter.check(user());
@@ -28,19 +28,30 @@ class AiRateLimiterTests {
 
     @Test
     void sixthRequestInWindowIsRejected() {
-        AiRateLimiter limiter = limiter(mockRedisTemplateReturning(6L));
+        AiRateLimiter limiter = limiter(mockRedisTemplateReturning("ai:rate-limit:user:42", 6L));
 
         assertThatThrownBy(() -> limiter.check(user()))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("429 TOO_MANY_REQUESTS");
     }
 
+    @Test
+    void trialRequestsUseIndependentTrialLimitAndKey() {
+        String trialKey = "ai:rate-limit:trial:203.0.113.7";
+        StringRedisTemplate redisTemplate = mockRedisTemplateReturning(trialKey, 4L);
+        AiRateLimiter limiter = limiter(redisTemplate);
+
+        assertThatThrownBy(() -> limiter.checkTrial("203.0.113.7"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("429 TOO_MANY_REQUESTS");
+    }
+
     @SuppressWarnings("unchecked")
-    private StringRedisTemplate mockRedisTemplateReturning(Long count) {
+    private StringRedisTemplate mockRedisTemplateReturning(String key, Long count) {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.increment("ai:rate-limit:user:42")).thenReturn(count);
+        when(valueOperations.increment(key)).thenReturn(count);
         return redisTemplate;
     }
 
@@ -48,6 +59,8 @@ class AiRateLimiterTests {
         AiRateLimiter limiter = new AiRateLimiter(redisTemplate);
         ReflectionTestUtils.setField(limiter, "maxRequests", 5);
         ReflectionTestUtils.setField(limiter, "windowSeconds", 60L);
+        ReflectionTestUtils.setField(limiter, "trialMaxRequests", 3);
+        ReflectionTestUtils.setField(limiter, "trialWindowSeconds", 300L);
         return limiter;
     }
 
