@@ -74,6 +74,23 @@ class EmailVerificationRedisIntegrationTests {
     }
 
     @Test
+    void attemptsFromDifferentClientAddressesShareTheCodeTotalLimit() {
+        service = service(redisTemplate, 5);
+        storeCode("123456");
+        for (int attempt = 0; attempt < 3; attempt++) {
+            assertThatThrownBy(() -> service.verifyCode(EMAIL, "000000", SOURCE_A))
+                    .isInstanceOf(ResponseStatusException.class);
+        }
+        for (int attempt = 0; attempt < 2; attempt++) {
+            assertThatThrownBy(() -> service.verifyCode(EMAIL, "000000", SOURCE_B))
+                    .isInstanceOf(ResponseStatusException.class);
+        }
+
+        assertThatThrownBy(() -> service.verifyCode(EMAIL, "123456", "198.51.100.12"))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
     void attemptStateDoesNotApplyToANewCode() {
         storeCode("123456");
         assertThatThrownBy(() -> service.verifyCode(EMAIL, "000000", SOURCE_A))
@@ -88,11 +105,16 @@ class EmailVerificationRedisIntegrationTests {
     }
 
     private EmailVerificationService service(StringRedisTemplate template) {
+        return service(template, 20);
+    }
+
+    private EmailVerificationService service(StringRedisTemplate template, int maxTotalAttempts) {
         EmailVerificationService emailService = new EmailVerificationService(template, mock(JavaMailSender.class));
         ReflectionTestUtils.setField(emailService, "mailFrom", "noreply@example.com");
         ReflectionTestUtils.setField(emailService, "codeTtlSeconds", 300L);
         ReflectionTestUtils.setField(emailService, "cooldownSeconds", 60L);
         ReflectionTestUtils.setField(emailService, "maxVerificationAttempts", 5);
+        ReflectionTestUtils.setField(emailService, "maxTotalVerificationAttempts", maxTotalAttempts);
         return emailService;
     }
 }

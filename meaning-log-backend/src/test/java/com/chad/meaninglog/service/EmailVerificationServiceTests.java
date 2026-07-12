@@ -26,6 +26,7 @@ class EmailVerificationServiceTests {
     private static final String CODE_KEY = "email:verify:code:" + EMAIL;
     private static final String SOURCE = "198.51.100.10";
     private static final String ATTEMPT_KEY = "email:verify:attempts:" + EMAIL + ":" + SOURCE;
+    private static final String TOTAL_ATTEMPT_KEY = "email:verify:total-attempts:" + EMAIL;
 
     @Test
     @SuppressWarnings("unchecked")
@@ -53,9 +54,10 @@ class EmailVerificationServiceTests {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         when(redisTemplate.execute(
                 any(RedisScript.class),
-                eq(List.of(CODE_KEY, ATTEMPT_KEY)),
+                eq(List.of(CODE_KEY, ATTEMPT_KEY, TOTAL_ATTEMPT_KEY)),
                 eq("123456"),
-                eq("5")
+                eq("5"),
+                eq("20")
         )).thenReturn(1L);
         EmailVerificationService service = service(redisTemplate, mailSender);
 
@@ -63,9 +65,10 @@ class EmailVerificationServiceTests {
 
         verify(redisTemplate).execute(
                 any(RedisScript.class),
-                eq(List.of(CODE_KEY, ATTEMPT_KEY)),
+                eq(List.of(CODE_KEY, ATTEMPT_KEY, TOTAL_ATTEMPT_KEY)),
                 eq("123456"),
-                eq("5")
+                eq("5"),
+                eq("20")
         );
     }
 
@@ -75,9 +78,10 @@ class EmailVerificationServiceTests {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         when(redisTemplate.execute(
                 any(RedisScript.class),
-                eq(List.of(CODE_KEY, ATTEMPT_KEY)),
+                eq(List.of(CODE_KEY, ATTEMPT_KEY, TOTAL_ATTEMPT_KEY)),
                 eq("123456"),
-                eq("5")
+                eq("5"),
+                eq("20")
         )).thenReturn(-1L);
 
         assertThatThrownBy(() -> service(redisTemplate, mock(JavaMailSender.class))
@@ -91,15 +95,22 @@ class EmailVerificationServiceTests {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         when(redisTemplate.execute(
                 any(RedisScript.class),
-                eq(List.of(CODE_KEY, ATTEMPT_KEY)),
+                eq(List.of(CODE_KEY, ATTEMPT_KEY, TOTAL_ATTEMPT_KEY)),
                 eq("123456"),
-                eq("5")
+                eq("5"),
+                eq("20")
         )).thenReturn(1L);
 
         service(redisTemplate, mock(JavaMailSender.class)).verifyCode(EMAIL, "123456", SOURCE);
 
         ArgumentCaptor<RedisScript<Long>> scriptCaptor = ArgumentCaptor.forClass(RedisScript.class);
-        verify(redisTemplate).execute(scriptCaptor.capture(), eq(List.of(CODE_KEY, ATTEMPT_KEY)), eq("123456"), eq("5"));
+        verify(redisTemplate).execute(
+                scriptCaptor.capture(),
+                eq(List.of(CODE_KEY, ATTEMPT_KEY, TOTAL_ATTEMPT_KEY)),
+                eq("123456"),
+                eq("5"),
+                eq("20")
+        );
         String script = scriptCaptor.getValue().getScriptAsString();
         assertThat(script.indexOf("local attemptState = redis.call('get', KEYS[2])"))
                 .isLessThan(script.indexOf("if stored == ARGV[1] then"));
@@ -119,15 +130,25 @@ class EmailVerificationServiceTests {
 
         verify(redisTemplate).execute(
                 any(RedisScript.class),
-                eq(List.of(CODE_KEY, "email:verify:attempts:" + EMAIL + ":198.51.100.10")),
+                eq(List.of(
+                        CODE_KEY,
+                        "email:verify:attempts:" + EMAIL + ":198.51.100.10",
+                        TOTAL_ATTEMPT_KEY
+                )),
                 eq("123456"),
-                eq("5")
+                eq("5"),
+                eq("20")
         );
         verify(redisTemplate).execute(
                 any(RedisScript.class),
-                eq(List.of(CODE_KEY, "email:verify:attempts:" + EMAIL + ":198.51.100.11")),
+                eq(List.of(
+                        CODE_KEY,
+                        "email:verify:attempts:" + EMAIL + ":198.51.100.11",
+                        TOTAL_ATTEMPT_KEY
+                )),
                 eq("123456"),
-                eq("5")
+                eq("5"),
+                eq("20")
         );
     }
 
@@ -137,6 +158,7 @@ class EmailVerificationServiceTests {
         ReflectionTestUtils.setField(service, "codeTtlSeconds", 300L);
         ReflectionTestUtils.setField(service, "cooldownSeconds", 60L);
         ReflectionTestUtils.setField(service, "maxVerificationAttempts", 5);
+        ReflectionTestUtils.setField(service, "maxTotalVerificationAttempts", 20);
         return service;
     }
 }
