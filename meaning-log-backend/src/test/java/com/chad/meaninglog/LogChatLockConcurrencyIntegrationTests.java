@@ -77,6 +77,7 @@ class LogChatLockConcurrencyIntegrationTests {
         LogChatFixture fixture = createLogChat();
         CountDownLatch replyLocked = new CountDownLatch(1);
         CountDownLatch releaseReply = new CountDownLatch(1);
+        CountDownLatch deleteStarted = new CountDownLatch(1);
         CountDownLatch deleteFinished = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         doAnswer(invocation -> {
@@ -93,9 +94,11 @@ class LogChatLockConcurrencyIntegrationTests {
             assertThat(replyLocked.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
 
             Future<?> delete = executor.submit(() -> {
+                deleteStarted.countDown();
                 meaningLogLifecycleService.delete(fixture.user(), fixture.log().getId());
                 deleteFinished.countDown();
             });
+            assertThat(deleteStarted.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
             assertThat(deleteFinished.await(BLOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)).isFalse();
 
             releaseReply.countDown();
@@ -151,6 +154,7 @@ class LogChatLockConcurrencyIntegrationTests {
         LogChatFixture fixture = createLogChat();
         CountDownLatch aiStarted = new CountDownLatch(1);
         CountDownLatch releaseAi = new CountDownLatch(1);
+        CountDownLatch deleteStarted = new CountDownLatch(1);
         CountDownLatch deleteFinished = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         doAnswer(invocation -> {
@@ -166,9 +170,11 @@ class LogChatLockConcurrencyIntegrationTests {
             assertThat(aiStarted.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
 
             Future<?> delete = executor.submit(() -> {
+                deleteStarted.countDown();
                 meaningLogLifecycleService.delete(fixture.user(), fixture.log().getId());
                 deleteFinished.countDown();
             });
+            assertThat(deleteStarted.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
             assertThat(deleteFinished.await(BLOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)).isFalse();
 
             releaseAi.countDown();
@@ -187,6 +193,7 @@ class LogChatLockConcurrencyIntegrationTests {
         LogChatFixture fixture = createLogChat();
         CountDownLatch streamLocked = new CountDownLatch(1);
         CountDownLatch releaseStream = new CountDownLatch(1);
+        CountDownLatch deleteStarted = new CountDownLatch(1);
         CountDownLatch deleteFinished = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         doAnswer(invocation -> {
@@ -205,9 +212,11 @@ class LogChatLockConcurrencyIntegrationTests {
             assertThat(streamLocked.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
 
             Future<?> delete = executor.submit(() -> {
+                deleteStarted.countDown();
                 meaningLogLifecycleService.delete(fixture.user(), fixture.log().getId());
                 deleteFinished.countDown();
             });
+            assertThat(deleteStarted.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
             assertThat(deleteFinished.await(BLOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)).isFalse();
 
             releaseStream.countDown();
