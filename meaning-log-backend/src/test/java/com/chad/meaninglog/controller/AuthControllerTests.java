@@ -2,6 +2,7 @@ package com.chad.meaninglog.controller;
 
 import com.chad.meaninglog.dto.RegisterRequest;
 import com.chad.meaninglog.dto.ResetPasswordRequest;
+import com.chad.meaninglog.dto.SendCodeRequest;
 import com.chad.meaninglog.service.AuthService;
 import com.chad.meaninglog.service.ClientAddressResolver;
 import com.chad.meaninglog.service.EmailVerificationService;
@@ -27,6 +28,22 @@ class AuthControllerTests {
         controller.register(request, servletRequest);
 
         verify(authService).register(request, SOURCE_ADDRESS);
+    }
+
+    @Test
+    void sendCodeForwardsTheResolvedClientAddress() {
+        EmailVerificationService emailVerificationService = mock(EmailVerificationService.class);
+        AuthController controller = new AuthController(
+                mock(AuthService.class),
+                emailVerificationService,
+                new ClientAddressResolver("198.51.100.10/32")
+        );
+        SendCodeRequest request = new SendCodeRequest();
+        request.setEmail("alice@example.com");
+
+        controller.sendCode(request, requestWithSourceAddress());
+
+        verify(emailVerificationService).sendCode("alice@example.com", SOURCE_ADDRESS);
     }
 
     @Test

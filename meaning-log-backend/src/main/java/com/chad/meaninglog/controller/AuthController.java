@@ -34,8 +34,8 @@ public class AuthController {
     private final ClientAddressResolver clientAddressResolver;
 
     @PostMapping("/send-code")
-    public void sendCode(@Valid @RequestBody SendCodeRequest request) {
-        emailVerificationService.sendCode(request.getEmail());
+    public void sendCode(@Valid @RequestBody SendCodeRequest request, HttpServletRequest servletRequest) {
+        emailVerificationService.sendCode(request.getEmail(), clientAddressResolver.resolve(servletRequest));
     }
 
     @PostMapping("/register")

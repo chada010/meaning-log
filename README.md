@@ -173,6 +173,9 @@ npm run dev
 | `MAIL_USERNAME` | 发信邮箱 | `your-email@qq.com` |
 | `MAIL_PASSWORD` | SMTP 授权码 | `your-smtp-authorization-code` |
 | `MAIL_FROM` | 发信人 | `your-email@qq.com` |
+| `EMAIL_CODE_SEND_MAX_ATTEMPTS_PER_SOURCE` | 单来源验证码发送次数上限 | `5` / 分钟 |
+| `EMAIL_CODE_SEND_MAX_ATTEMPTS_GLOBAL` | 全局验证码发送次数上限 | `100` / 分钟 |
+| `EMAIL_CODE_SEND_WINDOW_SECONDS` | 验证码发送限流窗口（秒） | `60` |
 
 生产环境可使用以下 PowerShell 命令生成 JWT 密钥：
 

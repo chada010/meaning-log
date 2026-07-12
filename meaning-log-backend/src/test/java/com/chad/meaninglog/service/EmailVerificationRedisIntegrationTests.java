@@ -21,9 +21,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -33,8 +37,12 @@ class EmailVerificationRedisIntegrationTests {
 
     private static final String EMAIL = "alice@example.com";
     private static final String CODE_KEY = "email:verify:code:" + EMAIL;
+    private static final String COOLDOWN_KEY = "email:verify:cooldown:" + EMAIL;
     private static final String SOURCE_A = "198.51.100.10";
     private static final String SOURCE_B = "198.51.100.11";
+    private static final String SOURCE_C = "198.51.100.12";
+    private static final String SEND_SOURCE_ATTEMPT_KEY_PREFIX = "email:verify:send:source:";
+    private static final String SEND_GLOBAL_ATTEMPT_KEY = "email:verify:send:global";
 
     @Container
     static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7.4-alpine"))
@@ -50,6 +58,14 @@ class EmailVerificationRedisIntegrationTests {
         connectionFactory.afterPropertiesSet();
         redisTemplate = new StringRedisTemplate(connectionFactory);
         redisTemplate.afterPropertiesSet();
+        redisTemplate.delete(List.of(
+                CODE_KEY,
+                COOLDOWN_KEY,
+                SEND_SOURCE_ATTEMPT_KEY_PREFIX + SOURCE_A,
+                SEND_SOURCE_ATTEMPT_KEY_PREFIX + SOURCE_B,
+                SEND_SOURCE_ATTEMPT_KEY_PREFIX + SOURCE_C,
+                SEND_GLOBAL_ATTEMPT_KEY
+        ));
         service = service(redisTemplate);
     }
 
@@ -112,7 +128,7 @@ class EmailVerificationRedisIntegrationTests {
     @Test
     void simultaneousSendCodeRequestsReserveOnlyOneCooldown() throws Exception {
         JavaMailSender mailSender = mock(JavaMailSender.class);
-        service = service(redisTemplate, mailSender, 20);
+        service = service(redisTemplate, mailSender, 20, 5, 100);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
@@ -134,6 +150,60 @@ class EmailVerificationRedisIntegrationTests {
         }
     }
 
+    @Test
+    void failedRequestDoesNotReleaseAReplacementCooldownReservation() throws Exception {
+        JavaMailSender mailSender = mock(JavaMailSender.class);
+        AtomicInteger deliveries = new AtomicInteger();
+        CountDownLatch firstDeliveryStarted = new CountDownLatch(1);
+        CountDownLatch failFirstDelivery = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            if (deliveries.incrementAndGet() == 1) {
+                firstDeliveryStarted.countDown();
+                assertThat(failFirstDelivery.await(5, TimeUnit.SECONDS)).isTrue();
+                throw new IllegalStateException("SMTP unavailable");
+            }
+            return null;
+        }).when(mailSender).send(any(org.springframework.mail.SimpleMailMessage.class));
+        service = service(redisTemplate, mailSender, 20, 5, 100);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<?> firstRequest = executor.submit(() -> service.sendCode(EMAIL, SOURCE_A));
+            assertThat(firstDeliveryStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+            redisTemplate.delete(COOLDOWN_KEY);
+            service.sendCode(EMAIL, SOURCE_B);
+            failFirstDelivery.countDown();
+
+            assertThatThrownBy(firstRequest::get)
+                    .isInstanceOf(ExecutionException.class);
+            assertThat(redisTemplate.hasKey(COOLDOWN_KEY)).isTrue();
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void sendCodeLimitsRequestsFromOneSource() {
+        service = service(redisTemplate, mock(JavaMailSender.class), 20, 2, 100);
+
+        service.sendCode("first@example.com", SOURCE_A);
+        service.sendCode("second@example.com", SOURCE_A);
+
+        assertThatThrownBy(() -> service.sendCode("third@example.com", SOURCE_A))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void sendCodeLimitsRequestsAcrossSourcesGlobally() {
+        service = service(redisTemplate, mock(JavaMailSender.class), 20, 100, 2);
+
+        service.sendCode("global-first@example.com", SOURCE_A);
+        service.sendCode("global-second@example.com", SOURCE_B);
+
+        assertThatThrownBy(() -> service.sendCode("global-third@example.com", SOURCE_C))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
     private void storeCode(String code) {
         redisTemplate.opsForValue().set(CODE_KEY, code, Duration.ofSeconds(300));
     }
@@ -143,13 +213,15 @@ class EmailVerificationRedisIntegrationTests {
     }
 
     private EmailVerificationService service(StringRedisTemplate template, int maxTotalAttempts) {
-        return service(template, mock(JavaMailSender.class), maxTotalAttempts);
+        return service(template, mock(JavaMailSender.class), maxTotalAttempts, 5, 100);
     }
 
     private EmailVerificationService service(
             StringRedisTemplate template,
             JavaMailSender mailSender,
-            int maxTotalAttempts
+            int maxTotalAttempts,
+            int maxSendAttemptsPerSource,
+            int maxSendAttemptsGlobal
     ) {
         EmailVerificationService emailService = new EmailVerificationService(template, mailSender);
         ReflectionTestUtils.setField(emailService, "mailFrom", "noreply@example.com");
@@ -157,6 +229,9 @@ class EmailVerificationRedisIntegrationTests {
         ReflectionTestUtils.setField(emailService, "cooldownSeconds", 60L);
         ReflectionTestUtils.setField(emailService, "maxVerificationAttempts", 5);
         ReflectionTestUtils.setField(emailService, "maxTotalVerificationAttempts", maxTotalAttempts);
+        ReflectionTestUtils.setField(emailService, "maxSendAttemptsPerSource", maxSendAttemptsPerSource);
+        ReflectionTestUtils.setField(emailService, "maxSendAttemptsGlobal", maxSendAttemptsGlobal);
+        ReflectionTestUtils.setField(emailService, "sendAttemptWindowSeconds", 60L);
         return emailService;
     }
 
@@ -164,7 +239,7 @@ class EmailVerificationRedisIntegrationTests {
         return () -> {
             start.await();
             try {
-                service.sendCode(EMAIL);
+                service.sendCode(EMAIL, SOURCE_A);
                 return null;
             } catch (RuntimeException ex) {
                 return ex;

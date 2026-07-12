@@ -29,6 +29,8 @@ class EmailVerificationServiceTests {
     private static final String SOURCE = "198.51.100.10";
     private static final String ATTEMPT_KEY = "email:verify:attempts:" + EMAIL + ":" + SOURCE;
     private static final String TOTAL_ATTEMPT_KEY = "email:verify:total-attempts:" + EMAIL;
+    private static final String SEND_SOURCE_ATTEMPT_KEY = "email:verify:send:source:" + SOURCE;
+    private static final String SEND_GLOBAL_ATTEMPT_KEY = "email:verify:send:global";
 
     @Test
     @SuppressWarnings("unchecked")
@@ -38,22 +40,23 @@ class EmailVerificationServiceTests {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(
-                "email:verify:cooldown:" + EMAIL,
-                "1",
-                Duration.ofSeconds(60)
+                eq("email:verify:cooldown:" + EMAIL),
+                any(String.class),
+                eq(Duration.ofSeconds(60))
         )).thenReturn(true);
+        allowSendAttempt(redisTemplate);
         EmailVerificationService service = service(redisTemplate, mailSender);
 
-        service.sendCode(" Alice@Example.COM ");
+        service.sendCode(" Alice@Example.COM ", SOURCE);
 
         ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(messageCaptor.capture());
         assertThat(messageCaptor.getValue().getTo()).containsExactly(EMAIL);
         verify(valueOperations).set(eq(CODE_KEY), any(String.class), eq(Duration.ofSeconds(300)));
         verify(valueOperations).setIfAbsent(
-                "email:verify:cooldown:" + EMAIL,
-                "1",
-                Duration.ofSeconds(60)
+                eq("email:verify:cooldown:" + EMAIL),
+                any(String.class),
+                eq(Duration.ofSeconds(60))
         );
         verify(redisTemplate, never()).hasKey("email:verify:cooldown:" + EMAIL);
     }
@@ -65,12 +68,12 @@ class EmailVerificationServiceTests {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(
-                "email:verify:cooldown:" + EMAIL,
-                "1",
-                Duration.ofSeconds(60)
+                eq("email:verify:cooldown:" + EMAIL),
+                any(String.class),
+                eq(Duration.ofSeconds(60))
         )).thenReturn(false);
 
-        assertThatThrownBy(() -> service(redisTemplate, mailSender).sendCode(EMAIL))
+        assertThatThrownBy(() -> service(redisTemplate, mailSender).sendCode(EMAIL, SOURCE))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
 
         verify(mailSender, never()).send(any(SimpleMailMessage.class));
@@ -84,17 +87,22 @@ class EmailVerificationServiceTests {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(
-                "email:verify:cooldown:" + EMAIL,
-                "1",
-                Duration.ofSeconds(60)
+                eq("email:verify:cooldown:" + EMAIL),
+                any(String.class),
+                eq(Duration.ofSeconds(60))
         )).thenReturn(true);
+        allowSendAttempt(redisTemplate);
         doThrow(new IllegalStateException("SMTP unavailable"))
                 .when(mailSender).send(any(SimpleMailMessage.class));
 
-        assertThatThrownBy(() -> service(redisTemplate, mailSender).sendCode(EMAIL))
+        assertThatThrownBy(() -> service(redisTemplate, mailSender).sendCode(EMAIL, SOURCE))
                 .isInstanceOf(IllegalStateException.class);
 
-        verify(redisTemplate).delete("email:verify:cooldown:" + EMAIL);
+        verify(redisTemplate).execute(
+                any(RedisScript.class),
+                eq(List.of("email:verify:cooldown:" + EMAIL)),
+                any(String.class)
+        );
     }
 
     @Test
@@ -209,6 +217,20 @@ class EmailVerificationServiceTests {
         ReflectionTestUtils.setField(service, "cooldownSeconds", 60L);
         ReflectionTestUtils.setField(service, "maxVerificationAttempts", 5);
         ReflectionTestUtils.setField(service, "maxTotalVerificationAttempts", 20);
+        ReflectionTestUtils.setField(service, "maxSendAttemptsPerSource", 5);
+        ReflectionTestUtils.setField(service, "maxSendAttemptsGlobal", 100);
+        ReflectionTestUtils.setField(service, "sendAttemptWindowSeconds", 60L);
         return service;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void allowSendAttempt(StringRedisTemplate redisTemplate) {
+        when(redisTemplate.execute(
+                any(RedisScript.class),
+                eq(List.of(SEND_SOURCE_ATTEMPT_KEY, SEND_GLOBAL_ATTEMPT_KEY)),
+                eq("60"),
+                eq("5"),
+                eq("100")
+        )).thenReturn(1L);
     }
 }

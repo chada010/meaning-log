@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 
 import static com.chad.meaninglog.util.EmailNormalizer.normalize;
@@ -24,6 +25,9 @@ public class EmailVerificationService {
     private static final String COOLDOWN_KEY_PREFIX = "email:verify:cooldown:";
     private static final String ATTEMPT_KEY_PREFIX = "email:verify:attempts:";
     private static final String TOTAL_ATTEMPT_KEY_PREFIX = "email:verify:total-attempts:";
+    private static final String SEND_SOURCE_ATTEMPT_KEY_PREFIX = "email:verify:send:source:";
+    private static final String SEND_GLOBAL_ATTEMPT_KEY = "email:verify:send:global";
+    private static final SecureRandom RANDOM = new SecureRandom();
     private static final DefaultRedisScript<Long> CONSUME_CODE_SCRIPT = new DefaultRedisScript<>(
             "local stored = redis.call('get', KEYS[1])\n"
                     + "if not stored then\n"
@@ -64,6 +68,28 @@ public class EmailVerificationService {
                     + "return 0",
             Long.class
     );
+    private static final DefaultRedisScript<Long> RELEASE_COOLDOWN_SCRIPT = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then\n"
+                    + "  return redis.call('del', KEYS[1])\n"
+                    + "end\n"
+                    + "return 0",
+            Long.class
+    );
+    private static final DefaultRedisScript<Long> RESERVE_SEND_ATTEMPT_SCRIPT = new DefaultRedisScript<>(
+            "local sourceAttempts = tonumber(redis.call('get', KEYS[1]) or '0')\n"
+                    + "local globalAttempts = tonumber(redis.call('get', KEYS[2]) or '0')\n"
+                    + "if sourceAttempts >= tonumber(ARGV[2]) or globalAttempts >= tonumber(ARGV[3]) then\n"
+                    + "  return 0\n"
+                    + "end\n"
+                    + "if redis.call('incr', KEYS[1]) == 1 then\n"
+                    + "  redis.call('expire', KEYS[1], ARGV[1])\n"
+                    + "end\n"
+                    + "if redis.call('incr', KEYS[2]) == 1 then\n"
+                    + "  redis.call('expire', KEYS[2], ARGV[1])\n"
+                    + "end\n"
+                    + "return 1",
+            Long.class
+    );
 
     private final StringRedisTemplate redisTemplate;
     private final JavaMailSender mailSender;
@@ -83,15 +109,25 @@ public class EmailVerificationService {
     @Value("${email.verification.max-total-attempts:20}")
     private int maxTotalVerificationAttempts;
 
+    @Value("${email.verification.send.max-attempts-per-source:5}")
+    private int maxSendAttemptsPerSource;
+
+    @Value("${email.verification.send.max-attempts-global:100}")
+    private int maxSendAttemptsGlobal;
+
+    @Value("${email.verification.send.window-seconds:60}")
+    private long sendAttemptWindowSeconds;
+
     /**
      * 生成并发送 6 位验证码；同一邮箱 60 秒内只能发一次。
      */
-    public void sendCode(String email) {
+    public void sendCode(String email, String sourceAddress) {
         String normalizedEmail = normalize(email);
         String cooldownKey = COOLDOWN_KEY_PREFIX + normalizedEmail;
+        String cooldownToken = generateCooldownToken();
         Boolean cooldownReserved = redisTemplate.opsForValue().setIfAbsent(
                 cooldownKey,
-                "1",
+                cooldownToken,
                 Duration.ofSeconds(cooldownSeconds)
         );
         if (!Boolean.TRUE.equals(cooldownReserved)) {
@@ -99,11 +135,12 @@ public class EmailVerificationService {
         }
 
         try {
+            reserveSendAttempt(sourceAddress);
             String code = generateCode();
             sendEmail(normalizedEmail, code);
             redisTemplate.opsForValue().set(CODE_KEY_PREFIX + normalizedEmail, code, Duration.ofSeconds(codeTtlSeconds));
         } catch (RuntimeException ex) {
-            redisTemplate.delete(cooldownKey);
+            releaseCooldown(cooldownKey, cooldownToken);
             throw ex;
         }
     }
@@ -130,9 +167,31 @@ public class EmailVerificationService {
     }
 
     private String generateCode() {
-        SecureRandom random = new SecureRandom();
-        int n = random.nextInt(1_000_000);
+        int n = RANDOM.nextInt(1_000_000);
         return String.format("%06d", n);
+    }
+
+    private String generateCooldownToken() {
+        byte[] token = new byte[16];
+        RANDOM.nextBytes(token);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(token);
+    }
+
+    private void reserveSendAttempt(String sourceAddress) {
+        Long reserved = redisTemplate.execute(
+                RESERVE_SEND_ATTEMPT_SCRIPT,
+                List.of(SEND_SOURCE_ATTEMPT_KEY_PREFIX + sourceAddress, SEND_GLOBAL_ATTEMPT_KEY),
+                String.valueOf(sendAttemptWindowSeconds),
+                String.valueOf(maxSendAttemptsPerSource),
+                String.valueOf(maxSendAttemptsGlobal)
+        );
+        if (!Long.valueOf(1).equals(reserved)) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "请稍后再试，发送太频繁");
+        }
+    }
+
+    private void releaseCooldown(String cooldownKey, String cooldownToken) {
+        redisTemplate.execute(RELEASE_COOLDOWN_SCRIPT, List.of(cooldownKey), cooldownToken);
     }
 
     private void sendEmail(String to, String code) {
