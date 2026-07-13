@@ -48,6 +48,35 @@ try {
 Assert-True $nativeFailureCaught 'A non-zero native exit code must throw a descriptive error.'
 Assert-NativeCommandSucceeded 'Test command' 0
 
+$exampleMailFromCaught = $false
+try {
+    Assert-MailFromAddress 'noreply@your-verified-domain.example'
+} catch {
+    $exampleMailFromCaught = $_.Exception.Message -eq 'MAIL_FROM in .env must not use the example domain'
+}
+Assert-True $exampleMailFromCaught 'The example MAIL_FROM domain must stop local startup.'
+Assert-MailFromAddress 'noreply@example.com'
+
+$quote = [char]39
+$quotedRoot = "C:\Users\O${quote}Brien\meaning-log"
+$quotedExecutable = Join-Path $quotedRoot 'meaning-log-backend\mvnw.cmd'
+$quotedOutput = Join-Path $quotedRoot 'logs\backend-local.log'
+$quotedError = Join-Path $quotedRoot 'logs\backend-local-error.log'
+$processParameters = Get-DetachedProcessParameters `
+    -FilePath $quotedExecutable `
+    -Arguments @('spring-boot:run') `
+    -WorkingDirectory $quotedRoot `
+    -OutputPath $quotedOutput `
+    -ErrorPath $quotedError
+Assert-Equal $quotedRoot $processParameters.WorkingDirectory `
+    'A working directory containing an apostrophe must remain intact.'
+Assert-Equal $quotedExecutable $processParameters.FilePath `
+    'An executable path containing an apostrophe must remain intact.'
+Assert-Equal $quotedOutput $processParameters.RedirectStandardOutput `
+    'An output path containing an apostrophe must remain intact.'
+Assert-Equal $quotedError $processParameters.RedirectStandardError `
+    'An error path containing an apostrophe must remain intact.'
+
 $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
 $listener.Start()
 try {

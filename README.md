@@ -112,9 +112,11 @@ cd ..
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 ```
 
-脚本会校验 `.env`，为当前工作区创建独立的 Docker Compose 项目，并启动和等待 MySQL、Redis、后端与前端就绪。启动后访问前端 [http://localhost:5173](http://localhost:5173)，后端监听 [http://localhost:8080](http://localhost:8080)。日志写入根目录 `logs/`。
+脚本会校验 `.env`，拒绝空值和示例邮件配置，为当前工作区创建独立的 Docker Compose 项目，并启动和等待 MySQL、Redis、后端与前端就绪。启动后访问前端 [http://localhost:5173](http://localhost:5173)，后端监听 [http://localhost:8080](http://localhost:8080)。标准输出写入根目录 `logs/*-local.log`，错误输出写入 `logs/*-local-error.log`。
 
 如果 `8080` 或 `5173` 已被占用，脚本会直接退出，避免把其他工作区或未加载当前 `.env` 的进程误判为启动成功。请先停止占用端口的进程，再重新运行脚本。
+
+后端本身也会在 `MAIL_PASSWORD` 或 `MAIL_FROM` 缺失、仍为示例值或格式无效时拒绝启动，因此 IDE 和部署平台必须配置同样的邮件变量。
 
 ### 日常开发
 

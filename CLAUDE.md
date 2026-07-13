@@ -115,7 +115,7 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 
 注册前须先调用 `POST /api/auth/send-code` 获取 6 位验证码（TTL 5 分钟，同一邮箱 60 秒冷却）。验证码用 Redis 存储，key 为 `email:verify:code:<email>`；冷却 key 为 `email:verify:cooldown:<email>`。`AuthService.register()` 在写库前调用 `EmailVerificationService.verifyCode()` 校验，通过后立即删除 Redis key 防止重用。
 
-本地启动统一从根目录 `.env` 读取 `MAIL_*` 配置，并由 `scripts/start-local.ps1` 通过子进程环境传给后端。脚本按工作区路径隔离 Docker Compose 项目；如果 `8080` 或 `5173` 已被占用，则直接退出以避免复用未加载当前配置的进程。停止当前工作区的依赖使用 `scripts/stop-local-dependencies.ps1`。不要将真实 Resend Key 写入 Git 跟踪文件、日志或启动命令行。
+本地启动统一从根目录 `.env` 读取 `MAIL_*` 配置，并由 `scripts/start-local.ps1` 通过子进程环境传给后端。脚本拒绝空值和 `.example` 发件域名，按工作区路径隔离 Docker Compose 项目；如果 `8080` 或 `5173` 已被占用，则直接退出以避免复用未加载当前配置的进程。后端在所有启动方式下都会校验 `MAIL_PASSWORD` 和 `MAIL_FROM` 并对缺失或示例配置 fail-fast。停止当前工作区的依赖使用 `scripts/stop-local-dependencies.ps1`。不要将真实 Resend Key 写入 Git 跟踪文件、日志或启动命令行。
 
 ### CORS
 

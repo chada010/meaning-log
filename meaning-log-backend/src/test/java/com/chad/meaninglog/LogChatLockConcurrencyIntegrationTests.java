@@ -37,7 +37,10 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.mail.password=test-smtp-password",
+        "mail.from=noreply@example.com"
+})
 class LogChatLockConcurrencyIntegrationTests {
 
     private static final long TIMEOUT_SECONDS = 5;

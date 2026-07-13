@@ -31,6 +31,56 @@ function Assert-NativeCommandSucceeded {
     }
 }
 
+function Assert-MailFromAddress {
+    param([string]$Address)
+
+    try {
+        $mailAddress = [Net.Mail.MailAddress]::new($Address)
+    } catch {
+        throw 'MAIL_FROM in .env must be a valid email address'
+    }
+    if ($mailAddress.Host.EndsWith('.example', [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'MAIL_FROM in .env must not use the example domain'
+    }
+}
+
+function Get-DetachedProcessParameters {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments,
+        [string]$WorkingDirectory,
+        [string]$OutputPath,
+        [string]$ErrorPath
+    )
+
+    return @{
+        FilePath = $FilePath
+        ArgumentList = $Arguments
+        WorkingDirectory = $WorkingDirectory
+        RedirectStandardOutput = $OutputPath
+        RedirectStandardError = $ErrorPath
+        WindowStyle = 'Hidden'
+    }
+}
+
+function Start-DetachedLocalProcess {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments,
+        [string]$WorkingDirectory,
+        [string]$OutputPath,
+        [string]$ErrorPath
+    )
+
+    $parameters = Get-DetachedProcessParameters `
+        -FilePath $FilePath `
+        -Arguments $Arguments `
+        -WorkingDirectory $WorkingDirectory `
+        -OutputPath $OutputPath `
+        -ErrorPath $ErrorPath
+    Start-Process @parameters
+}
+
 function Test-ListeningPort {
     param([int]$Port)
 

@@ -69,14 +69,6 @@ function Wait-ForComposeHealth {
     return $false
 }
 
-function Start-DetachedPowerShell {
-    param([string]$Script)
-
-    $bytes = [Text.Encoding]::Unicode.GetBytes($Script)
-    $encodedScript = [Convert]::ToBase64String($bytes)
-    Start-Process powershell.exe -ArgumentList '-NoProfile', '-EncodedCommand', $encodedScript -WindowStyle Hidden
-}
-
 function Invoke-WithProcessEnvironment {
     param(
         [hashtable]$Variables,
@@ -130,11 +122,7 @@ $mailPort = 0
 if (-not [int]::TryParse($localEnv.MAIL_PORT, [ref]$mailPort) -or $mailPort -lt 1 -or $mailPort -gt 65535) {
     throw 'MAIL_PORT in .env must be an integer between 1 and 65535'
 }
-try {
-    $null = [Net.Mail.MailAddress]::new($localEnv.MAIL_FROM)
-} catch {
-    throw 'MAIL_FROM in .env must be a valid email address'
-}
+Assert-MailFromAddress $localEnv.MAIL_FROM
 
 Assert-ListeningPortAvailable 8080 'backend'
 Assert-ListeningPortAvailable 5173 'frontend'
@@ -155,7 +143,8 @@ foreach ($service in 'mysql', 'redis') {
 }
 
 $backendLog = Join-Path $logPath 'backend-local.log'
-$backendScript = "Set-Location '$backendPath'; & '.\mvnw.cmd' spring-boot:run *> '$backendLog'"
+$backendErrorLog = Join-Path $logPath 'backend-local-error.log'
+$backendExecutable = Join-Path $backendPath 'mvnw.cmd'
 $backendEnvironment = @{
     SPRING_PROFILES_ACTIVE = 'local'
     SPRING_DATASOURCE_USERNAME = $localEnv.MYSQL_USER
@@ -175,18 +164,29 @@ $backendEnvironment = @{
     MAIL_WRITE_TIMEOUT_MS = Get-LocalEnvValue $localEnv 'MAIL_WRITE_TIMEOUT_MS' '10000'
 }
 Invoke-WithProcessEnvironment $backendEnvironment {
-    Start-DetachedPowerShell $backendScript
+    Start-DetachedLocalProcess `
+        -FilePath $backendExecutable `
+        -Arguments @('spring-boot:run') `
+        -WorkingDirectory $backendPath `
+        -OutputPath $backendLog `
+        -ErrorPath $backendErrorLog
 }
 
 $frontendLog = Join-Path $logPath 'frontend-local.log'
-$frontendScript = "Set-Location '$frontendPath'; & npm.cmd run dev *> '$frontendLog'"
-Start-DetachedPowerShell $frontendScript
+$frontendErrorLog = Join-Path $logPath 'frontend-local-error.log'
+$npmExecutable = (Get-Command npm.cmd -ErrorAction Stop).Source
+Start-DetachedLocalProcess `
+    -FilePath $npmExecutable `
+    -Arguments @('run', 'dev') `
+    -WorkingDirectory $frontendPath `
+    -OutputPath $frontendLog `
+    -ErrorPath $frontendErrorLog
 
 if (-not (Wait-ForListeningPort 8080 45)) {
-    throw "Backend did not start. See $logPath\backend-local.log"
+    throw "Backend did not start. See $backendLog and $backendErrorLog"
 }
 if (-not (Wait-ForListeningPort 5173 30)) {
-    throw "Frontend did not start. See $logPath\frontend-local.log"
+    throw "Frontend did not start. See $frontendLog and $frontendErrorLog"
 }
 
 Write-Host 'Local services are ready:'
