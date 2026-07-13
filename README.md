@@ -112,7 +112,9 @@ cd ..
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 ```
 
-脚本会校验 `.env`，启动并等待 MySQL、Redis、后端与前端就绪。启动后访问前端 [http://localhost:5173](http://localhost:5173)，后端监听 [http://localhost:8080](http://localhost:8080)。日志写入根目录 `logs/`。
+脚本会校验 `.env`，为当前工作区创建独立的 Docker Compose 项目，并启动和等待 MySQL、Redis、后端与前端就绪。启动后访问前端 [http://localhost:5173](http://localhost:5173)，后端监听 [http://localhost:8080](http://localhost:8080)。日志写入根目录 `logs/`。
+
+如果 `8080` 或 `5173` 已被占用，脚本会直接退出，避免把其他工作区或未加载当前 `.env` 的进程误判为启动成功。请先停止占用端口的进程，再重新运行脚本。
 
 ### 日常开发
 
@@ -122,7 +124,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 ```
 
-停止依赖服务使用 `docker compose down`。不要随意执行 `docker compose down -v`，该命令会删除本地 MySQL 与 Redis 数据卷。
+停止当前工作区的 MySQL 与 Redis 使用：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-local-dependencies.ps1
+```
+
+停止脚本不会删除数据卷。不要直接运行未指定项目名的 `docker compose down`，它可能命中其他工作区的同名项目；也不要随意使用 `-v`，该参数会删除本地 MySQL 与 Redis 数据卷。
 
 ## 关键配置
 
