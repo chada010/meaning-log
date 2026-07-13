@@ -68,9 +68,63 @@ function Assert-MailFromAddress {
     } catch {
         throw 'MAIL_FROM in .env must be a valid email address'
     }
-    if ($mailAddress.Host.EndsWith('.example', [StringComparison]::OrdinalIgnoreCase)) {
+    $normalizedHost = $mailAddress.Host.TrimEnd('.')
+    if ($normalizedHost.Equals('example', [StringComparison]::OrdinalIgnoreCase) -or
+        $normalizedHost.EndsWith('.example', [StringComparison]::OrdinalIgnoreCase)) {
         throw 'MAIL_FROM in .env must not use the example domain'
     }
+}
+
+function Test-LocalProcessOwnsListeningPort {
+    param([Diagnostics.Process]$Process, [int]$Port)
+
+    if ($null -eq $Process -or $Process.HasExited) {
+        return $false
+    }
+
+    $connections = @(Get-NetTCPConnection `
+        -State Listen `
+        -LocalPort $Port `
+        -ErrorAction SilentlyContinue)
+    foreach ($connection in $connections) {
+        $currentProcessId = [int]$connection.OwningProcess
+        $visitedProcessIds = @{}
+        while ($currentProcessId -gt 0 -and -not $visitedProcessIds.ContainsKey($currentProcessId)) {
+            if ($currentProcessId -eq $Process.Id) {
+                return $true
+            }
+            $visitedProcessIds[$currentProcessId] = $true
+            $currentProcess = Get-CimInstance `
+                -ClassName Win32_Process `
+                -Filter "ProcessId = $currentProcessId" `
+                -ErrorAction SilentlyContinue
+            if ($null -eq $currentProcess) {
+                break
+            }
+            $currentProcessId = [int]$currentProcess.ParentProcessId
+        }
+    }
+    return $false
+}
+
+function Wait-ForLocalProcessListeningPort {
+    param(
+        [Diagnostics.Process]$Process,
+        [int]$Port,
+        [int]$TimeoutSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if ($null -eq $Process -or $Process.HasExited) {
+            return $false
+        }
+        if (Test-LocalProcessOwnsListeningPort $Process $Port) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    return $false
 }
 
 function Get-DetachedProcessParameters {

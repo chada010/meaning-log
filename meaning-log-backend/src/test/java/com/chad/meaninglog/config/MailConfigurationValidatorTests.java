@@ -65,6 +65,17 @@ class MailConfigurationValidatorTests {
     }
 
     @Test
+    void failsWhenMailFromUsesBareExampleDomain() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.mail.password=test-smtp-password",
+                        "mail.from=noreply@example"
+                )
+                .run(context -> assertThat(context.getStartupFailure())
+                        .hasRootCauseMessage("MAIL_FROM must not use the example domain"));
+    }
+
+    @Test
     void failsWhenMailFromIsInvalid() {
         contextRunner
                 .withPropertyValues(

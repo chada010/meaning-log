@@ -24,19 +24,6 @@ function Get-LocalEnvValue {
     return $DefaultValue
 }
 
-function Wait-ForListeningPort {
-    param([int]$Port, [int]$TimeoutSeconds)
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        if (Test-ListeningPort $Port) {
-            return $true
-        }
-        Start-Sleep -Seconds 1
-    }
-    return $false
-}
-
 function Wait-ForComposeHealth {
     param([string[]]$ComposeArguments, [string]$Service, [int]$TimeoutSeconds)
 
@@ -167,7 +154,7 @@ try {
             -ErrorPath $backendErrorLog
     }
     Write-LocalProcessState $processStatePath $composeProjectName $backendProcess $null
-    if (-not (Wait-ForListeningPort 8080 45)) {
+    if (-not (Wait-ForLocalProcessListeningPort $backendProcess 8080 45)) {
         throw "Backend did not start. See $backendLog and $backendErrorLog"
     }
 
@@ -181,7 +168,7 @@ try {
         -OutputPath $frontendLog `
         -ErrorPath $frontendErrorLog
     Write-LocalProcessState $processStatePath $composeProjectName $backendProcess $frontendProcess
-    if (-not (Wait-ForListeningPort 5173 30)) {
+    if (-not (Wait-ForLocalProcessListeningPort $frontendProcess 5173 30)) {
         throw "Frontend did not start. See $frontendLog and $frontendErrorLog"
     }
     $startupSucceeded = $true

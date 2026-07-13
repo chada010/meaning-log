@@ -76,6 +76,22 @@ try {
     $exampleMailFromCaught = $_.Exception.Message -eq 'MAIL_FROM in .env must not use the example domain'
 }
 Assert-True $exampleMailFromCaught 'The example MAIL_FROM domain must stop local startup.'
+$bareExampleMailFromCaught = $false
+try {
+    Assert-MailFromAddress 'noreply@example'
+} catch {
+    $bareExampleMailFromCaught = $_.Exception.Message -eq 'MAIL_FROM in .env must not use the example domain'
+}
+Assert-True $bareExampleMailFromCaught 'The bare example domain must stop local startup.'
+$trailingDotExampleMailFromCaught = $false
+try {
+    Assert-MailFromAddress 'noreply@example.'
+} catch {
+    $trailingDotExampleMailFromCaught = `
+        $_.Exception.Message -eq 'MAIL_FROM in .env must not use the example domain'
+}
+Assert-True $trailingDotExampleMailFromCaught `
+    'An example domain with a trailing dot must stop local startup.'
 Assert-MailFromAddress 'noreply@example.com'
 
 $quote = [char]39
@@ -152,6 +168,9 @@ $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
 $listener.Start()
 try {
     $occupiedPort = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+    $currentProcess = Get-Process -Id $PID
+    Assert-True (Wait-ForLocalProcessListeningPort $currentProcess $occupiedPort 2) `
+        'Readiness must recognize a port owned by the started process.'
     $portConflictCaught = $false
     try {
         Assert-ListeningPortAvailable $occupiedPort 'test service'
@@ -159,8 +178,43 @@ try {
         $portConflictCaught = $_.Exception.Message -like "*port $occupiedPort is already in use*"
     }
     Assert-True $portConflictCaught 'An occupied application port must stop local startup.'
+
+    $unrelatedProcess = Start-Process powershell.exe `
+        -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 30' `
+        -WindowStyle Hidden `
+        -PassThru
+    try {
+        Assert-True (-not (Wait-ForLocalProcessListeningPort $unrelatedProcess $occupiedPort 1)) `
+            'A port owned by another process must not satisfy readiness.'
+    } finally {
+        if (-not $unrelatedProcess.HasExited) {
+            Stop-Process -Id $unrelatedProcess.Id -Force
+        }
+    }
+
 } finally {
     $listener.Stop()
+}
+
+$childListenerScript = @"
+`$listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $occupiedPort)
+`$listener.Start()
+try { Start-Sleep -Seconds 30 } finally { `$listener.Stop() }
+"@
+$childListenerCommand = [Convert]::ToBase64String(
+    [Text.Encoding]::Unicode.GetBytes($childListenerScript)
+)
+$wrapperScript = "& powershell.exe -NoProfile -EncodedCommand $childListenerCommand"
+$wrapperCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($wrapperScript))
+$wrapperProcess = Start-Process powershell.exe `
+    -ArgumentList '-NoProfile', '-EncodedCommand', $wrapperCommand `
+    -WindowStyle Hidden `
+    -PassThru
+try {
+    Assert-True (Wait-ForLocalProcessListeningPort $wrapperProcess $occupiedPort 5) `
+        'Readiness must recognize a port owned by a descendant process.'
+} finally {
+    Stop-LocalProcessTree $wrapperProcess
 }
 
 Write-Output 'local-dev-common tests passed'

@@ -42,7 +42,9 @@ public class MailConfigurationValidator implements InitializingBean {
         } catch (AddressException ex) {
             throw new IllegalStateException("MAIL_FROM must contain a valid sender address", ex);
         }
-        if (address.getAddress().toLowerCase(Locale.ROOT).endsWith(".example")) {
+        String normalizedAddress = address.getAddress().toLowerCase(Locale.ROOT);
+        String normalizedDomain = normalizedAddress.substring(normalizedAddress.lastIndexOf('@') + 1);
+        if (normalizedDomain.equals("example") || normalizedDomain.endsWith(".example")) {
             throw new IllegalStateException("MAIL_FROM must not use the example domain");
         }
     }
