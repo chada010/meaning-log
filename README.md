@@ -65,9 +65,7 @@ meaning-log/
 
 - Java 17
 - Node.js 20+
-- Docker Desktop（推荐，用于 MySQL 与 Redis）
-
-没有 Docker Desktop 时，也可使用本机已有的 MySQL 8 和 Redis，但需要自行保证它们分别监听在 `3306` 和 `6379`。
+- Docker Desktop（必需，用于 MySQL 与 Redis）
 
 ### 2. 首次配置
 
@@ -112,7 +110,7 @@ cd ..
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 ```
 
-脚本会校验 `.env`，拒绝空值和示例邮件配置，为当前工作区创建独立的 Docker Compose 项目，并启动和等待 MySQL、Redis、后端与前端就绪。启动后访问前端 [http://localhost:5173](http://localhost:5173)，后端监听 [http://localhost:8080](http://localhost:8080)。标准输出写入根目录 `logs/*-local.log`，错误输出写入 `logs/*-local-error.log`。
+脚本通过 Docker Compose 解析并校验 `.env`，拒绝空值和示例邮件配置，为当前工作区创建独立的 Docker Compose 项目，并启动和等待 MySQL、Redis、后端与前端就绪。若应用启动失败，脚本会停止本次新建的后端与前端进程。启动后访问前端 [http://localhost:5173](http://localhost:5173)，后端监听 [http://localhost:8080](http://localhost:8080)。标准输出写入根目录 `logs/*-local.log`，错误输出写入 `logs/*-local-error.log`。
 
 如果 `8080` 或 `5173` 已被占用，脚本会直接退出，避免把其他工作区或未加载当前 `.env` 的进程误判为启动成功。请先停止占用端口的进程，再重新运行脚本。
 

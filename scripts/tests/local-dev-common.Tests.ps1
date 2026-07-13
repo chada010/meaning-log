@@ -48,6 +48,15 @@ try {
 Assert-True $nativeFailureCaught 'A non-zero native exit code must throw a descriptive error.'
 Assert-NativeCommandSucceeded 'Test command' 0
 
+$composeEnvironment = ConvertFrom-ComposeEnvironmentOutput @(
+    'MYSQL_PASSWORD=password with spaces',
+    'MAIL_PASSWORD=resend=value=with=equals'
+)
+Assert-Equal 'password with spaces' $composeEnvironment.MYSQL_PASSWORD `
+    'Compose-parsed values must be passed through without further dotenv parsing.'
+Assert-Equal 'resend=value=with=equals' $composeEnvironment.MAIL_PASSWORD `
+    'Environment values may contain equals signs.'
+
 $exampleMailFromCaught = $false
 try {
     Assert-MailFromAddress 'noreply@your-verified-domain.example'
@@ -76,6 +85,20 @@ Assert-Equal $quotedOutput $processParameters.RedirectStandardOutput `
     'An output path containing an apostrophe must remain intact.'
 Assert-Equal $quotedError $processParameters.RedirectStandardError `
     'An error path containing an apostrophe must remain intact.'
+
+$testProcess = Start-Process powershell.exe `
+    -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 30' `
+    -WindowStyle Hidden `
+    -PassThru
+try {
+    Stop-LocalProcessTree $testProcess
+    $testProcess.WaitForExit(5000) | Out-Null
+    Assert-True $testProcess.HasExited 'Startup rollback must stop a process created by the script.'
+} finally {
+    if (-not $testProcess.HasExited) {
+        Stop-Process -Id $testProcess.Id -Force
+    }
+}
 
 $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
 $listener.Start()

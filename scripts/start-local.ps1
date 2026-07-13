@@ -9,21 +9,6 @@ $commonScriptPath = Join-Path $PSScriptRoot 'local-dev-common.ps1'
 
 . $commonScriptPath
 
-function Get-DotEnvValues {
-    param([string]$Path)
-
-    $values = @{}
-    Get-Content $Path | ForEach-Object {
-        if ($_.Trim() -and -not $_.Trim().StartsWith('#')) {
-            $pair = $_.Split('=', 2)
-            if ($pair.Length -eq 2) {
-                $values[$pair[0].Trim()] = $pair[1].Trim()
-            }
-        }
-    }
-    return $values
-}
-
 function Get-LocalEnvValue {
     param(
         [hashtable]$Values,
@@ -96,7 +81,9 @@ if (-not (Test-Path (Join-Path $frontendPath 'node_modules'))) {
     throw 'Frontend dependencies are missing. Run npm install in meaning-log-frontend first.'
 }
 
-$localEnv = Get-DotEnvValues $envPath
+& docker info --format '{{.ServerVersion}}' | Out-Null
+Assert-NativeCommandSucceeded 'Checking Docker availability' $LASTEXITCODE
+$localEnv = Get-LocalEnvironmentValues $projectRoot
 $requiredNames = @(
     'MYSQL_DATABASE',
     'MYSQL_USER',
@@ -130,8 +117,6 @@ Assert-ListeningPortAvailable 5173 'frontend'
 $composeArguments = Get-LocalComposeArguments $projectRoot
 $composeProjectName = Get-LocalComposeProjectName $projectRoot
 
-& docker info --format '{{.ServerVersion}}' | Out-Null
-Assert-NativeCommandSucceeded 'Checking Docker availability' $LASTEXITCODE
 New-Item -ItemType Directory -Force -Path $logPath | Out-Null
 & docker @composeArguments up -d
 Assert-NativeCommandSucceeded 'Starting Docker Compose dependencies' $LASTEXITCODE
@@ -142,51 +127,61 @@ foreach ($service in 'mysql', 'redis') {
     }
 }
 
-$backendLog = Join-Path $logPath 'backend-local.log'
-$backendErrorLog = Join-Path $logPath 'backend-local-error.log'
-$backendExecutable = Join-Path $backendPath 'mvnw.cmd'
-$backendEnvironment = @{
-    SPRING_PROFILES_ACTIVE = 'local'
-    SPRING_DATASOURCE_USERNAME = $localEnv.MYSQL_USER
-    SPRING_DATASOURCE_PASSWORD = $localEnv.MYSQL_PASSWORD
-    SPRING_DATASOURCE_URL = "jdbc:mysql://localhost:$($localEnv.MYSQL_PORT)/$($localEnv.MYSQL_DATABASE)?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
-    SPRING_DATA_REDIS_HOST = 'localhost'
-    SPRING_DATA_REDIS_PORT = $localEnv.REDIS_PORT
-    MAIL_HOST = $localEnv.MAIL_HOST
-    MAIL_PORT = $localEnv.MAIL_PORT
-    MAIL_USERNAME = $localEnv.MAIL_USERNAME
-    MAIL_PASSWORD = $localEnv.MAIL_PASSWORD
-    MAIL_FROM = $localEnv.MAIL_FROM
-    MAIL_SMTP_SSL_ENABLE = Get-LocalEnvValue $localEnv 'MAIL_SMTP_SSL_ENABLE' 'true'
-    MAIL_SMTP_STARTTLS_ENABLE = Get-LocalEnvValue $localEnv 'MAIL_SMTP_STARTTLS_ENABLE' 'false'
-    MAIL_CONNECTION_TIMEOUT_MS = Get-LocalEnvValue $localEnv 'MAIL_CONNECTION_TIMEOUT_MS' '10000'
-    MAIL_READ_TIMEOUT_MS = Get-LocalEnvValue $localEnv 'MAIL_READ_TIMEOUT_MS' '10000'
-    MAIL_WRITE_TIMEOUT_MS = Get-LocalEnvValue $localEnv 'MAIL_WRITE_TIMEOUT_MS' '10000'
-}
-Invoke-WithProcessEnvironment $backendEnvironment {
-    Start-DetachedLocalProcess `
-        -FilePath $backendExecutable `
-        -Arguments @('spring-boot:run') `
-        -WorkingDirectory $backendPath `
-        -OutputPath $backendLog `
-        -ErrorPath $backendErrorLog
-}
+$backendProcess = $null
+$frontendProcess = $null
+$startupSucceeded = $false
+try {
+    $backendLog = Join-Path $logPath 'backend-local.log'
+    $backendErrorLog = Join-Path $logPath 'backend-local-error.log'
+    $backendExecutable = Join-Path $backendPath 'mvnw.cmd'
+    $backendEnvironment = @{
+        SPRING_PROFILES_ACTIVE = 'local'
+        SPRING_DATASOURCE_USERNAME = $localEnv.MYSQL_USER
+        SPRING_DATASOURCE_PASSWORD = $localEnv.MYSQL_PASSWORD
+        SPRING_DATASOURCE_URL = "jdbc:mysql://localhost:$($localEnv.MYSQL_PORT)/$($localEnv.MYSQL_DATABASE)?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
+        SPRING_DATA_REDIS_HOST = 'localhost'
+        SPRING_DATA_REDIS_PORT = $localEnv.REDIS_PORT
+        MAIL_HOST = $localEnv.MAIL_HOST
+        MAIL_PORT = $localEnv.MAIL_PORT
+        MAIL_USERNAME = $localEnv.MAIL_USERNAME
+        MAIL_PASSWORD = $localEnv.MAIL_PASSWORD
+        MAIL_FROM = $localEnv.MAIL_FROM
+        MAIL_SMTP_SSL_ENABLE = Get-LocalEnvValue $localEnv 'MAIL_SMTP_SSL_ENABLE' 'true'
+        MAIL_SMTP_STARTTLS_ENABLE = Get-LocalEnvValue $localEnv 'MAIL_SMTP_STARTTLS_ENABLE' 'false'
+        MAIL_CONNECTION_TIMEOUT_MS = Get-LocalEnvValue $localEnv 'MAIL_CONNECTION_TIMEOUT_MS' '10000'
+        MAIL_READ_TIMEOUT_MS = Get-LocalEnvValue $localEnv 'MAIL_READ_TIMEOUT_MS' '10000'
+        MAIL_WRITE_TIMEOUT_MS = Get-LocalEnvValue $localEnv 'MAIL_WRITE_TIMEOUT_MS' '10000'
+    }
+    $backendProcess = Invoke-WithProcessEnvironment $backendEnvironment {
+        Start-DetachedLocalProcess `
+            -FilePath $backendExecutable `
+            -Arguments @('spring-boot:run') `
+            -WorkingDirectory $backendPath `
+            -OutputPath $backendLog `
+            -ErrorPath $backendErrorLog
+    }
+    if (-not (Wait-ForListeningPort 8080 45)) {
+        throw "Backend did not start. See $backendLog and $backendErrorLog"
+    }
 
-$frontendLog = Join-Path $logPath 'frontend-local.log'
-$frontendErrorLog = Join-Path $logPath 'frontend-local-error.log'
-$npmExecutable = (Get-Command npm.cmd -ErrorAction Stop).Source
-Start-DetachedLocalProcess `
-    -FilePath $npmExecutable `
-    -Arguments @('run', 'dev') `
-    -WorkingDirectory $frontendPath `
-    -OutputPath $frontendLog `
-    -ErrorPath $frontendErrorLog
-
-if (-not (Wait-ForListeningPort 8080 45)) {
-    throw "Backend did not start. See $backendLog and $backendErrorLog"
-}
-if (-not (Wait-ForListeningPort 5173 30)) {
-    throw "Frontend did not start. See $frontendLog and $frontendErrorLog"
+    $frontendLog = Join-Path $logPath 'frontend-local.log'
+    $frontendErrorLog = Join-Path $logPath 'frontend-local-error.log'
+    $npmExecutable = (Get-Command npm.cmd -ErrorAction Stop).Source
+    $frontendProcess = Start-DetachedLocalProcess `
+        -FilePath $npmExecutable `
+        -Arguments @('run', 'dev') `
+        -WorkingDirectory $frontendPath `
+        -OutputPath $frontendLog `
+        -ErrorPath $frontendErrorLog
+    if (-not (Wait-ForListeningPort 5173 30)) {
+        throw "Frontend did not start. See $frontendLog and $frontendErrorLog"
+    }
+    $startupSucceeded = $true
+} finally {
+    if (-not $startupSucceeded) {
+        Stop-LocalProcessTree $frontendProcess
+        Stop-LocalProcessTree $backendProcess
+    }
 }
 
 Write-Host 'Local services are ready:'

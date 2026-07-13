@@ -31,6 +31,27 @@ function Assert-NativeCommandSucceeded {
     }
 }
 
+function ConvertFrom-ComposeEnvironmentOutput {
+    param([string[]]$Lines)
+
+    $values = @{}
+    foreach ($line in $Lines) {
+        $pair = $line.Split('=', 2)
+        if ($pair.Length -eq 2) {
+            $values[$pair[0]] = $pair[1]
+        }
+    }
+    return $values
+}
+
+function Get-LocalEnvironmentValues {
+    param([string]$ProjectRoot)
+
+    $output = & docker compose --project-directory $ProjectRoot config --environment
+    Assert-NativeCommandSucceeded 'Reading the Docker Compose environment' $LASTEXITCODE
+    return ConvertFrom-ComposeEnvironmentOutput $output
+}
+
 function Assert-MailFromAddress {
     param([string]$Address)
 
@@ -78,7 +99,17 @@ function Start-DetachedLocalProcess {
         -WorkingDirectory $WorkingDirectory `
         -OutputPath $OutputPath `
         -ErrorPath $ErrorPath
-    Start-Process @parameters
+    return Start-Process @parameters -PassThru
+}
+
+function Stop-LocalProcessTree {
+    param([Diagnostics.Process]$Process)
+
+    if ($null -eq $Process -or $Process.HasExited) {
+        return
+    }
+
+    & taskkill.exe /PID $Process.Id /T /F 2>$null | Out-Null
 }
 
 function Test-ListeningPort {
