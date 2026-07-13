@@ -94,11 +94,16 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 | `JWT_SECRET` | 开发占位符 | 生产环境必须替换 |
 | `AI_RATE_LIMIT_MAX_REQUESTS` | `5` | 每个 IP 每窗口期最大请求数 |
 | `AI_RATE_LIMIT_WINDOW_SECONDS` | `60` | 限流时间窗口（秒） |
-| `MAIL_HOST` | `smtp.qq.com` | SMTP 服务器。Railway 封锁标准 465/587 端口，生产环境使用 Resend（`smtp.resend.com`）并将端口设为 `2465` |
-| `MAIL_PORT` | `465` | SMTP 端口。Resend 备用端口为 `2465` |
-| `MAIL_USERNAME` | — | SMTP 用户名。Resend 固定填 `resend` |
-| `MAIL_PASSWORD` | — | SMTP 密码 / API Key |
-| `MAIL_FROM` | — | 发件人地址，须与已验证域名匹配 |
+| `MAIL_HOST` | `smtp.resend.com` | 当前使用 Resend SMTP；更换供应商时通过环境变量覆盖 |
+| `MAIL_PORT` | `2465` | Resend 隐式 TLS 端口，可绕过部分平台对 465/587 的限制 |
+| `MAIL_USERNAME` | `resend` | Resend 固定用户名 |
+| `MAIL_PASSWORD` | — | Resend 仅发信 API Key，必须通过环境变量配置 |
+| `MAIL_FROM` | — | 发件人地址，必须与 Resend 已验证域名匹配 |
+| `MAIL_SMTP_SSL_ENABLE` | `true` | Resend 2465 使用隐式 TLS |
+| `MAIL_SMTP_STARTTLS_ENABLE` | `false` | 使用隐式 TLS 时关闭 STARTTLS |
+| `MAIL_CONNECTION_TIMEOUT_MS` | `10000` | SMTP 建连超时（毫秒） |
+| `MAIL_READ_TIMEOUT_MS` | `10000` | SMTP 读取超时（毫秒） |
+| `MAIL_WRITE_TIMEOUT_MS` | `10000` | SMTP 写入超时（毫秒） |
 | `EMAIL_CODE_TTL` | `300` | 验证码有效期（秒） |
 | `EMAIL_CODE_COOLDOWN` | `60` | 同一邮箱重新发送冷却时间（秒） |
 
@@ -109,6 +114,8 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 ### 邮箱验证码
 
 注册前须先调用 `POST /api/auth/send-code` 获取 6 位验证码（TTL 5 分钟，同一邮箱 60 秒冷却）。验证码用 Redis 存储，key 为 `email:verify:code:<email>`；冷却 key 为 `email:verify:cooldown:<email>`。`AuthService.register()` 在写库前调用 `EmailVerificationService.verifyCode()` 校验，通过后立即删除 Redis key 防止重用。
+
+本地启动统一从根目录 `.env` 读取 `MAIL_*` 配置，并由 `scripts/start-local.ps1` 通过子进程环境传给后端。不要将真实 Resend Key 写入 Git 跟踪文件、日志或启动命令行。
 
 ### CORS
 

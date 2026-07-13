@@ -71,7 +71,7 @@ meaning-log/
 
 ### 2. 首次配置
 
-在仓库根目录创建 Docker Compose 的本地变量文件：
+在仓库根目录创建本地运行变量文件：
 
 ```cmd
 copy .env.example .env
@@ -84,7 +84,9 @@ copy meaning-log-backend\application-local.properties.example meaning-log-backen
 copy meaning-log-frontend\.env.local.example meaning-log-frontend\.env.local
 ```
 
-打开 `meaning-log-backend/application-local.properties`，填写自己的 DeepSeek Key；示例已提供仅供本地开发的 JWT 密钥。运行本地后端时设置 `SPRING_PROFILES_ACTIVE=local`，生产环境必须设置 Base64 编码的随机 `JWT_SECRET`：
+打开 `.env`，填写 Resend API Key，并将 `MAIL_FROM` 改为 Resend 已验证域名下的发件地址。Resend 使用 `smtp.resend.com:2465`、用户名 `resend` 和隐式 TLS。
+
+打开 `meaning-log-backend/application-local.properties`，填写自己的 DeepSeek Key；示例已提供仅供本地开发的 JWT 密钥。生产环境必须设置 Base64 编码的随机 `JWT_SECRET`：
 
 ```properties
 app.ai.api-key=your-deepseek-api-key
@@ -92,57 +94,32 @@ app.ai.api-key=your-deepseek-api-key
 
 从旧版本升级时，如本地文件仍使用 `ai.api-key`，当前版本会继续兼容读取；下次编辑时将该键改为 `app.ai.api-key` 即可。
 
-`.env`、`application-local.properties`、`application-docker.properties` 和 `.env.local` 均被 Git 忽略，真实密码与 API Key 不会进入提交。Docker Compose 会创建 `meaning_log` 数据库、`meaning_log` 本地数据库账号和 Redis；后端首次启动时自动执行 `schema.sql`。
+`.env`、`application-local.properties`、`application-docker.properties` 和 `.env.local` 均被 Git 忽略，真实密码与 API Key 不会进入提交。不要在 `.vscode/launch.json` 中重复保存 Resend Key。Docker Compose 会创建 `meaning_log` 数据库、`meaning_log` 本地数据库账号和 Redis；后端首次启动时自动执行 `schema.sql`。
 
-### 3. 启动依赖服务
-
-```cmd
-docker compose up -d
-docker compose ps
-```
-
-MySQL 和 Redis 第一次初始化需要几十秒，直到两项状态均为 `healthy` 再启动后端。
-
-> 本机已有 MySQL 或 Redis 占用 `3306` / `6379` 时，先停止旧服务，或在 `.env` 修改 `MYSQL_PORT` / `REDIS_PORT`，并同步更新 `application-local.properties` 的连接配置。
-
-### 4. 启动后端
-
-后端默认端口是 `8080`。
+首次运行前安装前端依赖：
 
 ```cmd
-cd meaning-log-backend
-set SPRING_PROFILES_ACTIVE=local
-mvnw.cmd spring-boot:run
-```
-
-### 5. 启动前端
-
-前端默认端口是 `5173`。
-
-```bash
 cd meaning-log-frontend
 npm install
-npm run dev
+cd ..
 ```
 
-启动后访问 [http://localhost:5173](http://localhost:5173)。
+### 3. 启动项目
+
+确认 Docker Desktop 已启动，然后在仓库根目录运行统一启动脚本：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
+```
+
+脚本会校验 `.env`，启动并等待 MySQL、Redis、后端与前端就绪。启动后访问前端 [http://localhost:5173](http://localhost:5173)，后端监听 [http://localhost:8080](http://localhost:8080)。日志写入根目录 `logs/`。
 
 ### 日常开发
 
-首次配置完成后，日常只需分别执行：
+首次配置完成后，日常仍使用统一启动脚本：
 
-```cmd
-docker compose up -d
-```
-
-```cmd
-cd meaning-log-backend
-mvnw.cmd spring-boot:run
-```
-
-```cmd
-cd meaning-log-frontend
-npm run dev
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 ```
 
 停止依赖服务使用 `docker compose down`。不要随意执行 `docker compose down -v`，该命令会删除本地 MySQL 与 Redis 数据卷。
@@ -171,11 +148,16 @@ npm run dev
 | `AUTH_LOGIN_ATTEMPT_WINDOW_SECONDS` | 登录失败限流窗口（秒） | `900` |
 | `AUTH_LOGIN_MAX_ATTEMPTS_PER_SOURCE` | 单来源登录尝试次数上限 | `20` / 15 分钟 |
 | `AUTH_LOGIN_MAX_ATTEMPTS_PER_PRINCIPAL_SOURCE` | 单账号单来源登录尝试次数上限 | `5` / 15 分钟 |
-| `MAIL_HOST` | SMTP Host | `smtp.qq.com` |
-| `MAIL_PORT` | SMTP Port | `465` |
-| `MAIL_USERNAME` | 发信邮箱 | `your-email@qq.com` |
-| `MAIL_PASSWORD` | SMTP 授权码 | `your-smtp-authorization-code` |
-| `MAIL_FROM` | 发信人 | `your-email@qq.com` |
+| `MAIL_HOST` | SMTP Host | `smtp.resend.com` |
+| `MAIL_PORT` | SMTP Port | `2465` |
+| `MAIL_USERNAME` | SMTP 用户名 | `resend` |
+| `MAIL_PASSWORD` | Resend 仅发信 API Key | 无，本地与部署环境必须配置 |
+| `MAIL_FROM` | Resend 已验证域名下的发件地址 | 无，本地与部署环境必须配置 |
+| `MAIL_SMTP_SSL_ENABLE` | 是否启用隐式 TLS | `true` |
+| `MAIL_SMTP_STARTTLS_ENABLE` | 是否启用 STARTTLS | `false` |
+| `MAIL_CONNECTION_TIMEOUT_MS` | SMTP 建连超时（毫秒） | `10000` |
+| `MAIL_READ_TIMEOUT_MS` | SMTP 读取超时（毫秒） | `10000` |
+| `MAIL_WRITE_TIMEOUT_MS` | SMTP 写入超时（毫秒） | `10000` |
 | `EMAIL_CODE_SEND_MAX_ATTEMPTS_PER_SOURCE` | 单来源验证码发送次数上限 | `5` / 分钟 |
 | `EMAIL_CODE_SEND_MAX_ATTEMPTS_GLOBAL` | 全局验证码发送次数上限 | `100` / 分钟 |
 | `EMAIL_CODE_SEND_WINDOW_SECONDS` | 验证码发送限流窗口（秒） | `60` |
