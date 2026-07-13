@@ -5,6 +5,8 @@ $commonScriptPath = Join-Path $scriptsPath 'local-dev-common.ps1'
 
 . $commonScriptPath
 
+$startLocalPath = Join-Path $scriptsPath 'start-local.ps1'
+
 function Assert-Equal {
     param($Expected, $Actual, [string]$Message)
 
@@ -20,6 +22,56 @@ function Assert-True {
         throw $Message
     }
 }
+
+$parseErrors = $null
+$tokens = $null
+$startLocalAst = [Management.Automation.Language.Parser]::ParseFile(
+    $startLocalPath,
+    [ref]$tokens,
+    [ref]$parseErrors
+)
+Assert-Equal 0 @($parseErrors).Count 'The local startup script must parse successfully.'
+$timeoutAssignment = $startLocalAst.Find({
+        param($node)
+        $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+        $node.Left.VariablePath.UserPath -eq 'composeHealthTimeoutSeconds'
+    }, $true)
+Assert-True ($null -ne $timeoutAssignment) `
+    'Local startup must declare a Compose health timeout.'
+$composeHealthTimeoutSeconds = 0
+$timeoutParsed = [int]::TryParse(
+    $timeoutAssignment.Right.Extent.Text,
+    [ref]$composeHealthTimeoutSeconds
+)
+Assert-True $timeoutParsed 'The Compose health timeout must be an integer literal.'
+Assert-True ($composeHealthTimeoutSeconds -ge 120) `
+    'Compose health waiting must cover the MySQL health-check window.'
+
+$dockerCommands = @($startLocalAst.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -eq 'docker'
+    }, $true))
+$composeUpCommand = $dockerCommands | Where-Object { $_.Extent.Text -match '\bup\s+-d\b' } |
+    Select-Object -First 1
+$composeDownCommand = $dockerCommands | Where-Object { $_.Extent.Text -match '\bdown\b' } |
+    Select-Object -First 1
+Assert-True ($null -ne $composeUpCommand) 'Local startup must start Compose dependencies.'
+Assert-True ($null -ne $composeDownCommand) 'Local startup must define Compose rollback.'
+$startupTry = $startLocalAst.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.TryStatementAst]
+    }, $true) | Where-Object {
+        $_.Body.Extent.StartOffset -le $composeUpCommand.Extent.StartOffset -and
+        $_.Body.Extent.EndOffset -ge $composeUpCommand.Extent.EndOffset
+    } | Select-Object -First 1
+Assert-True ($null -ne $startupTry) `
+    'Compose startup must be protected by the startup rollback block.'
+Assert-True (
+    $startupTry.Finally.Extent.StartOffset -le $composeDownCommand.Extent.StartOffset -and
+    $startupTry.Finally.Extent.EndOffset -ge $composeDownCommand.Extent.EndOffset
+) 'Compose rollback must run from the startup finally block.'
 
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) 'MeaningLogWorkspaceA'
 $sameRootWithTrailingSeparator = $testRoot + [IO.Path]::DirectorySeparatorChar

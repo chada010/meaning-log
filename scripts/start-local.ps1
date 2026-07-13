@@ -10,6 +10,7 @@ $commonScriptPath = Join-Path $PSScriptRoot 'local-dev-common.ps1'
 . $commonScriptPath
 
 $processStatePath = Get-LocalProcessStatePath $projectRoot
+$composeHealthTimeoutSeconds = 240
 
 function Get-LocalEnvValue {
     param(
@@ -36,6 +37,9 @@ function Wait-ForComposeHealth {
             Assert-NativeCommandSucceeded "Inspecting Docker health for service $Service" $LASTEXITCODE
             if ($health -eq 'healthy') {
                 return $true
+            }
+            if ($health -eq 'unhealthy') {
+                return $false
             }
         }
         Start-Sleep -Seconds 2
@@ -110,20 +114,26 @@ $composeProjectNameOverride = Get-LocalEnvValue $localEnv 'LOCAL_COMPOSE_PROJECT
 $composeArguments = Get-LocalComposeArguments $projectRoot $composeProjectNameOverride
 $composeProjectName = Get-LocalComposeProjectName $projectRoot $composeProjectNameOverride
 
-New-Item -ItemType Directory -Force -Path $logPath | Out-Null
-& docker @composeArguments up -d
-Assert-NativeCommandSucceeded 'Starting Docker Compose dependencies' $LASTEXITCODE
-
-foreach ($service in 'mysql', 'redis') {
-    if (-not (Wait-ForComposeHealth $composeArguments $service 60)) {
-        throw "Docker service did not become healthy: $service"
-    }
-}
-
 $backendProcess = $null
 $frontendProcess = $null
+$composeStartAttempted = $false
 $startupSucceeded = $false
 try {
+    New-Item -ItemType Directory -Force -Path $logPath | Out-Null
+    $composeStartAttempted = $true
+    & docker @composeArguments up -d
+    Assert-NativeCommandSucceeded 'Starting Docker Compose dependencies' $LASTEXITCODE
+    Write-LocalProcessState $processStatePath $composeProjectName $null $null
+
+    foreach ($service in 'mysql', 'redis') {
+        if (-not (Wait-ForComposeHealth `
+                $composeArguments `
+                $service `
+                $composeHealthTimeoutSeconds)) {
+            throw "Docker service did not become healthy: $service"
+        }
+    }
+
     $backendLog = Join-Path $logPath 'backend-local.log'
     $backendErrorLog = Join-Path $logPath 'backend-local-error.log'
     $backendExecutable = Join-Path $backendPath 'mvnw.cmd'
@@ -174,9 +184,34 @@ try {
     $startupSucceeded = $true
 } finally {
     if (-not $startupSucceeded) {
-        Stop-LocalProcessTree $frontendProcess
-        Stop-LocalProcessTree $backendProcess
-        Remove-Item -ErrorAction SilentlyContinue -LiteralPath $processStatePath
+        $rollbackSucceeded = $true
+        foreach ($processEntry in @(
+                @{ Name = 'frontend'; Process = $frontendProcess },
+                @{ Name = 'backend'; Process = $backendProcess }
+            )) {
+            try {
+                Stop-LocalProcessTree $processEntry.Process
+            } catch {
+                $rollbackSucceeded = $false
+                Write-Warning "Failed to stop local $($processEntry.Name) process: $($_.Exception.Message)"
+            }
+        }
+
+        if ($composeStartAttempted) {
+            try {
+                & docker @composeArguments down
+                Assert-NativeCommandSucceeded 'Rolling back Docker Compose dependencies' $LASTEXITCODE
+            } catch {
+                $rollbackSucceeded = $false
+                Write-Warning "Failed to roll back Docker Compose dependencies: $($_.Exception.Message)"
+            }
+        }
+
+        if ($rollbackSucceeded) {
+            Remove-Item -ErrorAction SilentlyContinue -LiteralPath $processStatePath
+        } else {
+            Write-Warning "Rollback was incomplete. Run scripts\stop-local.ps1 to retry cleanup."
+        }
     }
 }
 
