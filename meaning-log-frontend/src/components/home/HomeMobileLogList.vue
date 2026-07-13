@@ -31,12 +31,12 @@ const handleCommand = (command: string | number | object, log: MeaningLog) => {
       v-for="log in logs"
       :key="log.id"
       class="mobile-log-card"
-      role="button"
-      tabindex="0"
-      @click="emit('detail', log.id)"
-      @keydown.enter="emit('detail', log.id)"
     >
-      <div class="mobile-log-card-main">
+      <button
+        class="mobile-log-card-main"
+        type="button"
+        @click="emit('detail', log.id)"
+      >
         <div class="mobile-log-meta">
           <span>{{ log.logDate }}</span>
           <span v-if="log.mood">{{ log.mood }}</span>
@@ -51,8 +51,8 @@ const handleCommand = (command: string | number | object, log: MeaningLog) => {
             size="small"
           >{{ tag }}</el-tag>
         </div>
-      </div>
-      <div class="mobile-log-card-tools" @click.stop>
+      </button>
+      <div class="mobile-log-card-tools">
         <el-button
           text
           circle

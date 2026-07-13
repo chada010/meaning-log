@@ -69,7 +69,6 @@ const favoriteOnlyModel = computed({
     </div>
 
     <HomeMobileFilters
-      class="mobile-only"
       :favorite-only="favoriteOnly"
       :keyword="keyword"
       :selected-date="selectedDate"

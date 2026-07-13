@@ -32,68 +32,70 @@ const resetFilters = () => {
 </script>
 
 <template>
-  <div class="mobile-filter-bar">
-    <el-input
-      :model-value="keyword"
-      clearable
-      :prefix-icon="Search"
-      placeholder="搜索日志"
-      @update:model-value="emit('update:keyword', $event)"
-      @keyup.enter="applyFilters"
-      @clear="applyFilters"
-    />
-    <el-badge :value="activeFilterCount" :hidden="activeFilterCount === 0">
-      <el-button
-        class="mobile-filter-trigger"
-        circle
-        :icon="Filter"
-        title="筛选日志"
-        @click="drawerVisible = true"
+  <div class="mobile-filter-shell mobile-only">
+    <div class="mobile-filter-bar">
+      <el-input
+        :model-value="keyword"
+        clearable
+        :prefix-icon="Search"
+        placeholder="搜索日志"
+        @update:model-value="emit('update:keyword', $event)"
+        @keyup.enter="applyFilters"
+        @clear="applyFilters"
       />
-    </el-badge>
-  </div>
-
-  <el-drawer
-    v-model="drawerVisible"
-    class="mobile-filter-drawer"
-    direction="btt"
-    size="auto"
-    title="筛选日志"
-  >
-    <div class="mobile-filter-fields">
-      <label>
-        <span>标签</span>
-        <el-select
-          :model-value="selectedTag"
-          clearable
-          filterable
-          placeholder="全部标签"
-          @update:model-value="emit('update:selectedTag', $event ?? '')"
-          @change="applyFilters"
-        >
-          <el-option v-for="tag in tagOptions" :key="tag" :label="tag" :value="tag" />
-        </el-select>
-      </label>
-      <label>
-        <span>日期</span>
-        <el-date-picker
-          :model-value="selectedDate"
-          type="date"
-          value-format="YYYY-MM-DD"
-          placeholder="全部日期"
-          @update:model-value="emit('update:selectedDate', $event ?? '')"
-          @change="applyFilters"
+      <el-badge :value="activeFilterCount" :hidden="activeFilterCount === 0">
+        <el-button
+          class="mobile-filter-trigger"
+          circle
+          :icon="Filter"
+          title="筛选日志"
+          @click="drawerVisible = true"
         />
-      </label>
-      <div class="mobile-favorite-filter">
-        <span>仅看收藏</span>
-        <el-switch
-          :model-value="favoriteOnly"
-          @update:model-value="emit('update:favoriteOnly', $event)"
-          @change="applyFilters"
-        />
-      </div>
-      <el-button v-if="activeFilterCount" plain @click="resetFilters">清空筛选</el-button>
+      </el-badge>
     </div>
-  </el-drawer>
+
+    <el-drawer
+      v-model="drawerVisible"
+      class="mobile-filter-drawer"
+      direction="btt"
+      size="auto"
+      title="筛选日志"
+    >
+      <div class="mobile-filter-fields">
+        <label>
+          <span>标签</span>
+          <el-select
+            :model-value="selectedTag"
+            clearable
+            filterable
+            placeholder="全部标签"
+            @update:model-value="emit('update:selectedTag', $event ?? '')"
+            @change="applyFilters"
+          >
+            <el-option v-for="tag in tagOptions" :key="tag" :label="tag" :value="tag" />
+          </el-select>
+        </label>
+        <label>
+          <span>日期</span>
+          <el-date-picker
+            :model-value="selectedDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="全部日期"
+            @update:model-value="emit('update:selectedDate', $event ?? '')"
+            @change="applyFilters"
+          />
+        </label>
+        <div class="mobile-favorite-filter">
+          <span>仅看收藏</span>
+          <el-switch
+            :model-value="favoriteOnly"
+            @update:model-value="emit('update:favoriteOnly', $event)"
+            @change="applyFilters"
+          />
+        </div>
+        <el-button v-if="activeFilterCount" plain @click="resetFilters">清空筛选</el-button>
+      </div>
+    </el-drawer>
+  </div>
 </template>

@@ -25,7 +25,7 @@ defineProps<{
     </div>
   </section>
   <div class="stats-summary">
-    <span>共 <strong>{{ totalCount }}</strong> 篇</span>
+    <span>当前 <strong>{{ totalCount }}</strong> 篇</span>
     <i />
     <span>最近记录 {{ latestDate }}</span>
   </div>
