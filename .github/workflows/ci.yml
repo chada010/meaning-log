@@ -7,6 +7,14 @@ on:
       - main
 
 jobs:
+  powershell:
+    name: PowerShell
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: powershell
+        run: .\scripts\tests\local-dev-common.Tests.ps1
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
