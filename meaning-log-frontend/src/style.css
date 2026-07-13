@@ -1277,10 +1277,6 @@ a {
   }
 }
 
-.desktop-only {
-  display: block;
-}
-
 .mobile-only {
   display: none;
 }

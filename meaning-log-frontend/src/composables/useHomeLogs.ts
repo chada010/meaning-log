@@ -36,6 +36,7 @@ export const useHomeLogs = () => {
   const quickContent = ref('')
   const quickSaving = ref(false)
   const lastQuickLog = ref<MeaningLog>()
+  let latestLoadRequestId = 0
 
   const totalCount = computed(() => logs.value.length)
   const aiCount = computed(() => logs.value.filter((log) => log.aiSummary || log.aiTags).length)
@@ -66,6 +67,7 @@ export const useHomeLogs = () => {
   }
 
   const loadLogs = async () => {
+    const requestId = ++latestLoadRequestId
     loading.value = true
     try {
       const { data } = await getLogs({
@@ -74,9 +76,13 @@ export const useHomeLogs = () => {
         tag: selectedTag.value || undefined,
         favorite: favoriteOnly.value ? true : undefined,
       })
-      logs.value = data
+      if (requestId === latestLoadRequestId) {
+        logs.value = data
+      }
     } finally {
-      loading.value = false
+      if (requestId === latestLoadRequestId) {
+        loading.value = false
+      }
     }
   }
 
