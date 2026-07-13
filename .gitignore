@@ -5,6 +5,7 @@ target/
 *.war
 *.ear
 *.log
+logs/
 hs_err_pid*
 
 # ===== IntelliJ IDEA =====

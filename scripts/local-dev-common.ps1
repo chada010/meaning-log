@@ -1,5 +1,13 @@
 function Get-LocalComposeProjectName {
-    param([string]$ProjectRoot)
+    param([string]$ProjectRoot, [string]$ProjectNameOverride)
+
+    if (-not [string]::IsNullOrWhiteSpace($ProjectNameOverride)) {
+        $projectName = $ProjectNameOverride.Trim()
+        if ($projectName -notmatch '^[a-z0-9][a-z0-9_-]*$') {
+            throw 'LOCAL_COMPOSE_PROJECT_NAME must contain only lowercase letters, digits, hyphens, and underscores'
+        }
+        return $projectName
+    }
 
     $fullPath = [IO.Path]::GetFullPath($ProjectRoot)
     $normalizedPath = $fullPath.TrimEnd(
@@ -17,9 +25,9 @@ function Get-LocalComposeProjectName {
 }
 
 function Get-LocalComposeArguments {
-    param([string]$ProjectRoot)
+    param([string]$ProjectRoot, [string]$ProjectNameOverride)
 
-    $projectName = Get-LocalComposeProjectName $ProjectRoot
+    $projectName = Get-LocalComposeProjectName $ProjectRoot $ProjectNameOverride
     return @('compose', '--project-directory', $ProjectRoot, '--project-name', $projectName)
 }
 
@@ -110,6 +118,79 @@ function Stop-LocalProcessTree {
     }
 
     & taskkill.exe /PID $Process.Id /T /F 2>$null | Out-Null
+    $Process.WaitForExit(5000) | Out-Null
+    if (-not $Process.HasExited) {
+        throw "Failed to stop local process tree with PID $($Process.Id)"
+    }
+}
+
+function Get-LocalProcessStatePath {
+    param([string]$ProjectRoot)
+
+    return Join-Path $ProjectRoot 'logs\local-processes.json'
+}
+
+function ConvertTo-LocalProcessRecord {
+    param([Diagnostics.Process]$Process)
+
+    if ($null -eq $Process) {
+        return $null
+    }
+    return [ordered]@{
+        Id = $Process.Id
+        StartTimeFileTimeUtc = $Process.StartTime.ToFileTimeUtc()
+    }
+}
+
+function Write-LocalProcessState {
+    param(
+        [string]$Path,
+        [string]$ComposeProjectName,
+        [Diagnostics.Process]$BackendProcess,
+        [Diagnostics.Process]$FrontendProcess
+    )
+
+    $state = [ordered]@{
+        ComposeProjectName = $ComposeProjectName
+        Backend = ConvertTo-LocalProcessRecord $BackendProcess
+        Frontend = ConvertTo-LocalProcessRecord $FrontendProcess
+    }
+    $temporaryPath = "$Path.tmp"
+    $state | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath $temporaryPath
+    Move-Item -Force -LiteralPath $temporaryPath -Destination $Path
+}
+
+function Stop-LocalTrackedProcess {
+    param($Record, [string]$Name)
+
+    if ($null -eq $Record) {
+        return
+    }
+    $process = Get-Process -Id ([int]$Record.Id) -ErrorAction SilentlyContinue
+    if ($null -eq $process) {
+        return
+    }
+    if ($process.StartTime.ToFileTimeUtc() -ne [long]$Record.StartTimeFileTimeUtc) {
+        throw "Refusing to stop ${Name}: PID $($Record.Id) belongs to a different process"
+    }
+    Stop-LocalProcessTree $process
+}
+
+function Stop-LocalTrackedProcesses {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+    try {
+        $state = Get-Content -Raw -Encoding UTF8 -LiteralPath $Path | ConvertFrom-Json
+    } catch {
+        throw "Cannot read local process state: $Path"
+    }
+
+    Stop-LocalTrackedProcess $state.Frontend 'frontend'
+    Stop-LocalTrackedProcess $state.Backend 'backend'
+    return $state.ComposeProjectName
 }
 
 function Test-ListeningPort {

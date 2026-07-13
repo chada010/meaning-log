@@ -75,6 +75,14 @@ meaning-log/
 copy .env.example .env
 ```
 
+从旧版升级且需要继续使用原有 `meaning-log_mysql-data` 和 `meaning-log_redis-data` 数据卷时，在 `.env` 设置：
+
+```dotenv
+LOCAL_COMPOSE_PROJECT_NAME=meaning-log
+```
+
+该兼容配置会让新脚本继续使用旧 Compose 项目及其数据卷。新工作区应保持此项为空，以便按工作区隔离数据。
+
 复制后端与前端的本地配置样例：
 
 ```cmd
@@ -124,13 +132,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 ```
 
-停止当前工作区的 MySQL 与 Redis 使用：
+停止当前工作区的后端、前端、MySQL 与 Redis 使用：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-local-dependencies.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-local.ps1
 ```
 
-停止脚本不会删除数据卷。不要直接运行未指定项目名的 `docker compose down`，它可能命中其他工作区的同名项目；也不要随意使用 `-v`，该参数会删除本地 MySQL 与 Redis 数据卷。
+启动脚本会在 `logs/local-processes.json` 记录本次创建的应用进程，停止时核对 PID 与启动时间后再终止，避免误杀复用相同 PID 的其他进程。停止脚本不会删除数据卷。不要直接运行未指定项目名的 `docker compose down`，它可能命中其他工作区的同名项目；也不要随意使用 `-v`，该参数会删除本地 MySQL 与 Redis 数据卷。
 
 ## 关键配置
 
@@ -148,6 +156,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-local-dep
 | `REDIS_HOST` | Redis 地址 | `localhost` |
 | `REDIS_PORT` | Redis 端口 | `6379` |
 | `REDIS_PASSWORD` | Redis 密码 | 空 |
+| `LOCAL_COMPOSE_PROJECT_NAME` | Compose 项目名覆盖；仅在复用旧版数据卷时设为 `meaning-log` | 空，按工作区路径隔离 |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key（部署时使用） | 无，必须配置 |
 | `APP_AI_BASE_URL` | AI 接口基地址 | `https://api.deepseek.com/v1` |
 | `APP_AI_MODEL` | AI 模型名 | `deepseek-chat` |

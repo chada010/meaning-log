@@ -9,6 +9,8 @@ $commonScriptPath = Join-Path $PSScriptRoot 'local-dev-common.ps1'
 
 . $commonScriptPath
 
+$processStatePath = Get-LocalProcessStatePath $projectRoot
+
 function Get-LocalEnvValue {
     param(
         [hashtable]$Values,
@@ -80,6 +82,9 @@ if (-not (Test-Path $envPath)) {
 if (-not (Test-Path (Join-Path $frontendPath 'node_modules'))) {
     throw 'Frontend dependencies are missing. Run npm install in meaning-log-frontend first.'
 }
+if (Test-Path -LiteralPath $processStatePath) {
+    throw 'Local process state already exists. Run scripts\stop-local.ps1 before starting again.'
+}
 
 & docker info --format '{{.ServerVersion}}' | Out-Null
 Assert-NativeCommandSucceeded 'Checking Docker availability' $LASTEXITCODE
@@ -114,8 +119,9 @@ Assert-MailFromAddress $localEnv.MAIL_FROM
 Assert-ListeningPortAvailable 8080 'backend'
 Assert-ListeningPortAvailable 5173 'frontend'
 
-$composeArguments = Get-LocalComposeArguments $projectRoot
-$composeProjectName = Get-LocalComposeProjectName $projectRoot
+$composeProjectNameOverride = Get-LocalEnvValue $localEnv 'LOCAL_COMPOSE_PROJECT_NAME' ''
+$composeArguments = Get-LocalComposeArguments $projectRoot $composeProjectNameOverride
+$composeProjectName = Get-LocalComposeProjectName $projectRoot $composeProjectNameOverride
 
 New-Item -ItemType Directory -Force -Path $logPath | Out-Null
 & docker @composeArguments up -d
@@ -160,6 +166,7 @@ try {
             -OutputPath $backendLog `
             -ErrorPath $backendErrorLog
     }
+    Write-LocalProcessState $processStatePath $composeProjectName $backendProcess $null
     if (-not (Wait-ForListeningPort 8080 45)) {
         throw "Backend did not start. See $backendLog and $backendErrorLog"
     }
@@ -173,6 +180,7 @@ try {
         -WorkingDirectory $frontendPath `
         -OutputPath $frontendLog `
         -ErrorPath $frontendErrorLog
+    Write-LocalProcessState $processStatePath $composeProjectName $backendProcess $frontendProcess
     if (-not (Wait-ForListeningPort 5173 30)) {
         throw "Frontend did not start. See $frontendLog and $frontendErrorLog"
     }
@@ -181,6 +189,7 @@ try {
     if (-not $startupSucceeded) {
         Stop-LocalProcessTree $frontendProcess
         Stop-LocalProcessTree $backendProcess
+        Remove-Item -ErrorAction SilentlyContinue -LiteralPath $processStatePath
     }
 }
 

@@ -36,6 +36,18 @@ $composeArguments = @(Get-LocalComposeArguments $testRoot)
 Assert-Equal 5 $composeArguments.Count 'Compose arguments must include the isolated project name.'
 Assert-Equal '--project-name' $composeArguments[3] 'Compose arguments must declare the project name.'
 Assert-Equal $projectName $composeArguments[4] 'Compose arguments must use the workspace project name.'
+$legacyProjectName = Get-LocalComposeProjectName $testRoot 'meaning-log'
+Assert-Equal 'meaning-log' $legacyProjectName 'An explicit legacy project name must be preserved.'
+$legacyComposeArguments = @(Get-LocalComposeArguments $testRoot 'meaning-log')
+Assert-Equal 'meaning-log' $legacyComposeArguments[4] `
+    'Compose arguments must use the explicit legacy project name.'
+$invalidProjectNameCaught = $false
+try {
+    Get-LocalComposeProjectName $testRoot 'Meaning Log' | Out-Null
+} catch {
+    $invalidProjectNameCaught = $_.Exception.Message -like 'LOCAL_COMPOSE_PROJECT_NAME must contain*'
+}
+Assert-True $invalidProjectNameCaught 'An unsafe Compose project name must be rejected.'
 
 $nativeFailureCaught = $false
 & cmd.exe /c exit 7
@@ -86,17 +98,53 @@ Assert-Equal $quotedOutput $processParameters.RedirectStandardOutput `
 Assert-Equal $quotedError $processParameters.RedirectStandardError `
     'An error path containing an apostrophe must remain intact.'
 
+$processStatePath = Join-Path ([IO.Path]::GetTempPath()) "meaning-log-process-state-$PID.json"
 $testProcess = Start-Process powershell.exe `
     -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 30' `
     -WindowStyle Hidden `
     -PassThru
 try {
-    Stop-LocalProcessTree $testProcess
+    Write-LocalProcessState $processStatePath 'meaning-log-test' $testProcess $null
+    Assert-True (Test-Path -LiteralPath $processStatePath) `
+        'Starting an application process must persist its identity.'
+    $stoppedProjectName = Stop-LocalTrackedProcesses $processStatePath
     $testProcess.WaitForExit(5000) | Out-Null
+    Assert-Equal 'meaning-log-test' $stoppedProjectName `
+        'The tracked Compose project name must survive the process state round trip.'
     Assert-True $testProcess.HasExited 'Startup rollback must stop a process created by the script.'
+    Assert-True (Test-Path -LiteralPath $processStatePath) `
+        'Process state must remain available until Compose dependencies also stop.'
+    Assert-Equal 'meaning-log-test' (Stop-LocalTrackedProcesses $processStatePath) `
+        'A retry after the application process exits must retain the Compose project name.'
+    Remove-Item -LiteralPath $processStatePath
 } finally {
     if (-not $testProcess.HasExited) {
         Stop-Process -Id $testProcess.Id -Force
+    }
+    Remove-Item -ErrorAction SilentlyContinue -LiteralPath $processStatePath
+}
+
+$reusedPidProcess = Start-Process powershell.exe `
+    -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 30' `
+    -WindowStyle Hidden `
+    -PassThru
+try {
+    $pidReuseCaught = $false
+    $wrongRecord = [pscustomobject]@{
+        Id = $reusedPidProcess.Id
+        StartTimeFileTimeUtc = 0
+    }
+    try {
+        Stop-LocalTrackedProcess $wrongRecord 'test process'
+    } catch {
+        $pidReuseCaught = $_.Exception.Message -like 'Refusing to stop test process*'
+    }
+    Assert-True $pidReuseCaught 'A reused PID must not allow an unrelated process to be stopped.'
+    Assert-True (-not $reusedPidProcess.HasExited) `
+        'The process with a mismatched identity must remain running.'
+} finally {
+    if (-not $reusedPidProcess.HasExited) {
+        Stop-Process -Id $reusedPidProcess.Id -Force
     }
 }
 
