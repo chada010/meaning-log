@@ -206,7 +206,8 @@
     cursor: pointer;
   }
 
-  .mobile-log-card h3 {
+  .mobile-log-title {
+    display: block;
     margin: 4px 0;
     color: #20332e;
     font-size: 16px;
@@ -229,9 +230,8 @@
     outline-offset: 3px;
   }
 
-  .mobile-log-card p {
+  .mobile-log-summary {
     display: -webkit-box;
-    margin: 0;
     overflow: hidden;
     color: #5f716b;
     font-size: 13px;

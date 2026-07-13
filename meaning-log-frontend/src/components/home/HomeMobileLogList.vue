@@ -37,20 +37,20 @@ const handleCommand = (command: string | number | object, log: MeaningLog) => {
         type="button"
         @click="emit('detail', log.id)"
       >
-        <div class="mobile-log-meta">
+        <span class="mobile-log-meta">
           <span>{{ log.logDate }}</span>
           <span v-if="log.mood">{{ log.mood }}</span>
-        </div>
-        <h3>{{ log.title }}</h3>
-        <p>{{ previewLogContent(log.content) }}</p>
-        <div v-if="splitLogTags(log.aiTags).length" class="mobile-log-tags">
+        </span>
+        <strong class="mobile-log-title">{{ log.title }}</strong>
+        <span class="mobile-log-summary">{{ previewLogContent(log.content) }}</span>
+        <span v-if="splitLogTags(log.aiTags).length" class="mobile-log-tags">
           <el-tag
             v-for="tag in splitLogTags(log.aiTags).slice(0, 2)"
             :key="tag"
             effect="light"
             size="small"
           >{{ tag }}</el-tag>
-        </div>
+        </span>
       </button>
       <div class="mobile-log-card-tools">
         <el-button

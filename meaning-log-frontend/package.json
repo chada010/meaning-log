@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --experimental-loader ./test-loader.mjs --test src/api/stream.test.ts",
-    "type-check": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "npm run test:api && npm run test:unit",
+    "test:api": "node --experimental-loader ./test-loader.mjs --test src/api/stream.test.ts",
+    "test:unit": "vitest run",
+    "type-check": "vue-tsc --noEmit -p tsconfig.app.json && vue-tsc --noEmit -p tsconfig.test.json",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview"
   },
@@ -20,9 +22,12 @@
   "devDependencies": {
     "@types/node": "^24.12.2",
     "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.9.1",
+    "jsdom": "^29.1.1",
     "typescript": "~6.0.2",
     "vite": "^8.0.10",
+    "vitest": "^4.1.10",
     "vue-tsc": "^3.2.7"
   }
 }
