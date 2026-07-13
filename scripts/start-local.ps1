@@ -113,6 +113,15 @@ Assert-ListeningPortAvailable 5173 'frontend'
 $composeProjectNameOverride = Get-LocalEnvValue $localEnv 'LOCAL_COMPOSE_PROJECT_NAME' ''
 $composeArguments = Get-LocalComposeArguments $projectRoot $composeProjectNameOverride
 $composeProjectName = Get-LocalComposeProjectName $projectRoot $composeProjectNameOverride
+$managedComposeServices = @('mysql', 'redis')
+$existingComposeServices = @(& docker @composeArguments ps --services --all)
+Assert-NativeCommandSucceeded 'Reading existing Docker Compose services' $LASTEXITCODE
+$runningComposeServices = @(& docker @composeArguments ps --services --filter status=running)
+Assert-NativeCommandSucceeded 'Reading running Docker Compose services' $LASTEXITCODE
+$composeRollbackPlan = New-LocalComposeRollbackPlan `
+    $managedComposeServices `
+    $existingComposeServices `
+    $runningComposeServices
 
 $backendProcess = $null
 $frontendProcess = $null
@@ -125,7 +134,7 @@ try {
     Assert-NativeCommandSucceeded 'Starting Docker Compose dependencies' $LASTEXITCODE
     Write-LocalProcessState $processStatePath $composeProjectName $null $null
 
-    foreach ($service in 'mysql', 'redis') {
+    foreach ($service in $managedComposeServices) {
         if (-not (Wait-ForComposeHealth `
                 $composeArguments `
                 $service `
@@ -198,12 +207,36 @@ try {
         }
 
         if ($composeStartAttempted) {
-            try {
-                & docker @composeArguments down
-                Assert-NativeCommandSucceeded 'Rolling back Docker Compose dependencies' $LASTEXITCODE
-            } catch {
-                $rollbackSucceeded = $false
-                Write-Warning "Failed to roll back Docker Compose dependencies: $($_.Exception.Message)"
+            if ($composeRollbackPlan.RemoveProject) {
+                try {
+                    & docker @composeArguments down
+                    Assert-NativeCommandSucceeded 'Rolling back Docker Compose dependencies' $LASTEXITCODE
+                } catch {
+                    $rollbackSucceeded = $false
+                    Write-Warning "Failed to roll back Docker Compose dependencies: $($_.Exception.Message)"
+                }
+            } else {
+                $servicesToRemove = @($composeRollbackPlan.RemoveServices)
+                if ($servicesToRemove.Count -gt 0) {
+                    try {
+                        & docker @composeArguments rm --stop --force @servicesToRemove
+                        Assert-NativeCommandSucceeded 'Removing newly created Docker Compose services' $LASTEXITCODE
+                    } catch {
+                        $rollbackSucceeded = $false
+                        Write-Warning "Failed to remove newly created Docker Compose services: $($_.Exception.Message)"
+                    }
+                }
+
+                $servicesToStop = @($composeRollbackPlan.StopServices)
+                if ($servicesToStop.Count -gt 0) {
+                    try {
+                        & docker @composeArguments stop @servicesToStop
+                        Assert-NativeCommandSucceeded 'Stopping newly started Docker Compose services' $LASTEXITCODE
+                    } catch {
+                        $rollbackSucceeded = $false
+                        Write-Warning "Failed to stop newly started Docker Compose services: $($_.Exception.Message)"
+                    }
+                }
             }
         }
 

@@ -31,6 +31,46 @@ function Get-LocalComposeArguments {
     return @('compose', '--project-directory', $ProjectRoot, '--project-name', $projectName)
 }
 
+function New-LocalComposeRollbackPlan {
+    param(
+        [string[]]$ManagedServices,
+        [string[]]$ExistingServices,
+        [string[]]$RunningServices
+    )
+
+    $existingServiceSet = @{}
+    foreach ($service in $ExistingServices) {
+        if (-not [string]::IsNullOrWhiteSpace($service)) {
+            $existingServiceSet[$service] = $true
+        }
+    }
+    $runningServiceSet = @{}
+    foreach ($service in $RunningServices) {
+        if (-not [string]::IsNullOrWhiteSpace($service)) {
+            $runningServiceSet[$service] = $true
+        }
+    }
+
+    $removeProject = $existingServiceSet.Count -eq 0
+    $removeServices = @()
+    $stopServices = @()
+    if (-not $removeProject) {
+        $removeServices = @($ManagedServices | Where-Object {
+                -not $existingServiceSet.ContainsKey($_)
+            })
+        $stopServices = @($ManagedServices | Where-Object {
+                $existingServiceSet.ContainsKey($_) -and
+                -not $runningServiceSet.ContainsKey($_)
+            })
+    }
+
+    return [pscustomobject]@{
+        RemoveProject = $removeProject
+        RemoveServices = $removeServices
+        StopServices = $stopServices
+    }
+}
+
 function Assert-NativeCommandSucceeded {
     param([string]$Description, [int]$ExitCode)
 

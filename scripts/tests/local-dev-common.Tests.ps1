@@ -57,8 +57,16 @@ $composeUpCommand = $dockerCommands | Where-Object { $_.Extent.Text -match '\bup
     Select-Object -First 1
 $composeDownCommand = $dockerCommands | Where-Object { $_.Extent.Text -match '\bdown\b' } |
     Select-Object -First 1
+$composeRemoveCommand = $dockerCommands | Where-Object { $_.Extent.Text -match '\brm\s+--stop\s+--force\b' } |
+    Select-Object -First 1
+$composeStopCommand = $dockerCommands | Where-Object { $_.Extent.Text -match '\bstop\s+@servicesToStop\b' } |
+    Select-Object -First 1
 Assert-True ($null -ne $composeUpCommand) 'Local startup must start Compose dependencies.'
 Assert-True ($null -ne $composeDownCommand) 'Local startup must define Compose rollback.'
+Assert-True ($null -ne $composeRemoveCommand) `
+    'Local startup must remove services created by a failed startup.'
+Assert-True ($null -ne $composeStopCommand) `
+    'Local startup must stop services started by a failed startup.'
 $startupTry = $startLocalAst.FindAll({
         param($node)
         $node -is [Management.Automation.Language.TryStatementAst]
@@ -72,6 +80,12 @@ Assert-True (
     $startupTry.Finally.Extent.StartOffset -le $composeDownCommand.Extent.StartOffset -and
     $startupTry.Finally.Extent.EndOffset -ge $composeDownCommand.Extent.EndOffset
 ) 'Compose rollback must run from the startup finally block.'
+foreach ($rollbackCommand in @($composeRemoveCommand, $composeStopCommand)) {
+    Assert-True (
+        $startupTry.Finally.Extent.StartOffset -le $rollbackCommand.Extent.StartOffset -and
+        $startupTry.Finally.Extent.EndOffset -ge $rollbackCommand.Extent.EndOffset
+    ) 'Per-service Compose restoration must run from the startup finally block.'
+}
 
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) 'MeaningLogWorkspaceA'
 $sameRootWithTrailingSeparator = $testRoot + [IO.Path]::DirectorySeparatorChar
@@ -100,6 +114,36 @@ try {
     $invalidProjectNameCaught = $_.Exception.Message -like 'LOCAL_COMPOSE_PROJECT_NAME must contain*'
 }
 Assert-True $invalidProjectNameCaught 'An unsafe Compose project name must be rejected.'
+
+$newProjectRollback = New-LocalComposeRollbackPlan @('mysql', 'redis') @() @()
+Assert-True $newProjectRollback.RemoveProject `
+    'A project created by local startup must be removed after startup failure.'
+Assert-Equal '' ($newProjectRollback.RemoveServices -join ',') `
+    'A new project does not need per-service removal.'
+Assert-Equal '' ($newProjectRollback.StopServices -join ',') `
+    'A new project does not need per-service stop actions.'
+
+$runningProjectRollback = New-LocalComposeRollbackPlan `
+    @('mysql', 'redis') `
+    @('mysql', 'redis') `
+    @('mysql', 'redis')
+Assert-True (-not $runningProjectRollback.RemoveProject) `
+    'A pre-existing Compose project must not be removed after startup failure.'
+Assert-Equal '' ($runningProjectRollback.RemoveServices -join ',') `
+    'Pre-existing services must not be removed.'
+Assert-Equal '' ($runningProjectRollback.StopServices -join ',') `
+    'Services that were already running must remain running.'
+
+$partialProjectRollback = New-LocalComposeRollbackPlan `
+    @('mysql', 'redis') `
+    @('mysql') `
+    @()
+Assert-True (-not $partialProjectRollback.RemoveProject) `
+    'A partial pre-existing project must be preserved.'
+Assert-Equal 'redis' ($partialProjectRollback.RemoveServices -join ',') `
+    'A service created by local startup must be removed after failure.'
+Assert-Equal 'mysql' ($partialProjectRollback.StopServices -join ',') `
+    'A pre-existing service started by local startup must be stopped after failure.'
 
 $nativeFailureCaught = $false
 & cmd.exe /c exit 7
