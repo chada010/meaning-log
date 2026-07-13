@@ -7,7 +7,7 @@ defineProps<{
 </script>
 
 <template>
-  <section class="stats-grid">
+  <section class="stats-grid desktop-only">
     <div class="stat-card">
       <span>当前列表</span>
       <strong>{{ totalCount }}</strong>
@@ -24,4 +24,9 @@ defineProps<{
       <small>继续保持</small>
     </div>
   </section>
+  <div class="stats-summary">
+    <span>共 <strong>{{ totalCount }}</strong> 篇</span>
+    <i />
+    <span>最近记录 {{ latestDate }}</span>
+  </div>
 </template>

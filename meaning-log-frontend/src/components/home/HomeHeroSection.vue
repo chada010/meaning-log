@@ -44,8 +44,9 @@ const quickContentModel = computed({
           @keydown.meta.enter.prevent="emit('saveQuickLog')"
         />
         <div class="quick-log-actions">
-          <span>先写文字，标签、图片、情绪之后再补。Ctrl + Enter 快速保存。</span>
-          <div class="button-row">
+          <span class="quick-log-tip-desktop">先写文字，标签、图片、情绪之后再补。Ctrl + Enter 快速保存。</span>
+          <span class="quick-log-tip-mobile">保存后可以补充图片和情绪</span>
+          <div class="button-row quick-log-buttons-desktop">
             <el-button
               v-if="lastQuickLog"
               :icon="Edit"
@@ -63,6 +64,16 @@ const quickContentModel = computed({
               保存
             </el-button>
           </div>
+          <el-button
+            class="quick-save-mobile"
+            type="primary"
+            circle
+            :icon="Check"
+            :loading="quickSaving"
+            :disabled="!quickCanSave"
+            title="保存日志"
+            @click="emit('saveQuickLog')"
+          />
         </div>
       </div>
     </div>
