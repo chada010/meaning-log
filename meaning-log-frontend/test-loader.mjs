@@ -9,6 +9,9 @@ export async function resolve(specifier, context, nextResolve) {
     if (error?.code === 'ERR_MODULE_NOT_FOUND' && specifier.startsWith('.')) {
       return nextResolve(`${specifier}.ts`, context)
     }
+    if (error?.code === 'ERR_UNSUPPORTED_DIR_IMPORT' && specifier.startsWith('.')) {
+      return nextResolve(`${specifier}/index.ts`, context)
+    }
     throw error
   }
 }
