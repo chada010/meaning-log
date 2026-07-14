@@ -66,6 +66,26 @@ const router = createRouter({
       props: (route) => ({ id: Number(route.params.id) }),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/community',
+      name: 'community',
+      component: () => import('../views/community/CommunityFeedView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/community/post/:id',
+      name: 'community-post',
+      component: () => import('../views/community/CommunityPostDetailView.vue'),
+      props: (route) => ({ id: Number(route.params.id) }),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/user/:id',
+      name: 'community-user',
+      component: () => import('../views/community/UserProfileView.vue'),
+      props: (route) => ({ id: Number(route.params.id) }),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 
