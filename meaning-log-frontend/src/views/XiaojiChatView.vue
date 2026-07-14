@@ -8,7 +8,7 @@ import {
   type AiChatMessage,
   type AiChatSession,
 } from '../api/logs'
-import { streamFetch } from '../api/stream'
+import { runXiaojiChatTask } from '../api/aiTask'
 
 const sessions = ref<AiChatSession[]>([])
 const messages = ref<AiChatMessage[]>([])
@@ -75,28 +75,19 @@ const sendMessage = async () => {
   chatInput.value = ''
   sending.value = true
 
-  // 占位 assistant 消息，流式 chunk 追加到这里
-  messages.value.push({ id: Date.now() + 1, role: 'assistant', content: '', createdAt: '' })
-  const placeholderIndex = messages.value.length - 1
+  const placeholderIndex = messages.value.length
+  messages.value.push({ id: Date.now() + 1, role: 'assistant', content: '小记正在思考…', createdAt: '' })
   await scrollChatToBottom()
 
   try {
-    await streamFetch(
-      '/xiaoji/chat/stream',
-      { message, sessionId: activeSessionId.value ?? null },
-      (chunk) => {
-        messages.value[placeholderIndex].content += chunk
-        scrollChatToBottom()
-      },
-      (sessionId) => {
-        activeSessionId.value = sessionId
-      },
-    )
+    const response = await runXiaojiChatTask(message, activeSessionId.value)
+    if (response.sessionId) {
+      activeSessionId.value = response.sessionId
+    }
+    messages.value[placeholderIndex].content = response.reply || '小记暂时没有回应，请稍后再试。'
     await loadSessions()
   } catch {
-    if (!messages.value[placeholderIndex].content) {
-      messages.value[placeholderIndex].content = '小记暂时没有回应，请稍后再试。'
-    }
+    messages.value[placeholderIndex].content = '小记暂时没有回应，请稍后再试。'
     ElMessage.error('AI 服务暂时不可用，日志仍可正常记录')
   } finally {
     sending.value = false

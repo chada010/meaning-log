@@ -25,11 +25,9 @@ public class XiaojiChatWorkflowService {
     private final XiaojiChatQueryService xiaojiChatQueryService;
     private final XiaojiChatSupportService xiaojiChatSupportService;
     private final AiService aiService;
-    private final AiRateLimiter aiRateLimiter;
 
     @Transactional
     public AiChatResponse chatWithLog(UserAccount user, Long logId, String userMessage) {
-        aiRateLimiter.check(user);
         MeaningLog log = xiaojiChatSupportService.getMeaningLogForUpdate(user, logId);
         AiChatSession session = xiaojiChatSupportService.getOrCreateLogSession(user, log);
         List<OpenAiClient.ChatTurn> history = xiaojiChatSupportService.buildRecentTurns(session);
@@ -55,7 +53,6 @@ public class XiaojiChatWorkflowService {
 
     @Transactional
     public AiChatResponse chatWithReport(UserAccount user, Long reportId, String userMessage) {
-        aiRateLimiter.check(user);
         AiReport report = xiaojiChatSupportService.getAiReport(user, reportId);
         AiChatSession session = xiaojiChatSupportService.getOrCreateReportSession(user, report);
         List<OpenAiClient.ChatTurn> history = xiaojiChatSupportService.buildRecentTurns(session);
@@ -83,7 +80,6 @@ public class XiaojiChatWorkflowService {
 
     @Transactional
     public AiChatResponse chatWithCompanion(UserAccount user, Long sessionId, String userMessage) {
-        aiRateLimiter.check(user);
         AiChatSession session = sessionId == null
                 ? xiaojiChatSupportService.createGeneralSession(user, userMessage)
                 : xiaojiChatSupportService.getSession(user, sessionId);
@@ -106,7 +102,6 @@ public class XiaojiChatWorkflowService {
 
     @Transactional
     public XiaojiChatService.LogRefineStreamContext prepareLogRefineStream(UserAccount user, Long logId, String userMessage) {
-        aiRateLimiter.check(user);
         MeaningLog log = xiaojiChatSupportService.getMeaningLogForUpdate(user, logId);
         AiChatSession session = xiaojiChatSupportService.getOrCreateLogSession(user, log);
         List<OpenAiClient.ChatTurn> history = xiaojiChatSupportService.buildRecentTurns(session);
@@ -120,7 +115,6 @@ public class XiaojiChatWorkflowService {
     public XiaojiChatService.ReportRefineStreamContext prepareReportRefineStream(
             UserAccount user, Long reportId, String userMessage
     ) {
-        aiRateLimiter.check(user);
         AiReport report = xiaojiChatSupportService.getAiReport(user, reportId);
         AiChatSession session = xiaojiChatSupportService.getOrCreateReportSession(user, report);
         List<OpenAiClient.ChatTurn> history = xiaojiChatSupportService.buildRecentTurns(session);
@@ -136,7 +130,6 @@ public class XiaojiChatWorkflowService {
      */
     @Transactional
     public AiChatSession prepareCompanionStream(UserAccount user, Long sessionId, String userMessage) {
-        aiRateLimiter.check(user);
         AiChatSession session = sessionId == null
                 ? xiaojiChatSupportService.createGeneralSession(user, userMessage)
                 : xiaojiChatSupportService.getSession(user, sessionId);

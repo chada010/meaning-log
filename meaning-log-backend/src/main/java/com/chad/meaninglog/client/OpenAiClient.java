@@ -2,10 +2,7 @@ package com.chad.meaninglog.client;
 
 import com.chad.meaninglog.dto.AiReportResponse;
 import com.chad.meaninglog.dto.LogAiResult;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
@@ -20,24 +17,13 @@ public class OpenAiClient {
     private final OpenAiReportMessageFactory reportMessages;
     private final OpenAiCompanionMessageFactory companionMessages;
 
-    public OpenAiClient(
-            RestClient.Builder restClientBuilder,
-            ObjectMapper objectMapper,
-            @Value("${app.ai.api-key:}") String apiKey,
-            @Value("${app.ai.base-url:https://api.deepseek.com/v1}") String baseUrl,
-            @Value("${app.ai.model:deepseek-chat}") String model
-    ) {
+    public OpenAiClient(OpenAiTransport transport) {
+        this.transport = transport;
+        this.responseParser = transport.responseParser();
         OpenAiMessageSupport messageSupport = new OpenAiMessageSupport();
-        responseParser = new OpenAiResponseParser(objectMapper);
-        transport = new OpenAiTransport(
-                restClientBuilder.baseUrl(baseUrl).build(),
-                apiKey,
-                new OpenAiRequestFactory(model),
-                responseParser
-        );
-        journalMessages = new OpenAiJournalMessageFactory(messageSupport);
-        reportMessages = new OpenAiReportMessageFactory(messageSupport);
-        companionMessages = new OpenAiCompanionMessageFactory(messageSupport);
+        this.journalMessages = new OpenAiJournalMessageFactory(messageSupport);
+        this.reportMessages = new OpenAiReportMessageFactory(messageSupport);
+        this.companionMessages = new OpenAiCompanionMessageFactory(messageSupport);
     }
 
     public LogAiResult analyzeLog(String logDate, String title, String mood, String content) {

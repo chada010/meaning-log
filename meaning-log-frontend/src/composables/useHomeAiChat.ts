@@ -2,12 +2,12 @@ import { ElMessage } from 'element-plus'
 import { computed, ref, type Ref } from 'vue'
 import {
   applyLogAi,
-  chatWithLogAi,
   getLogAiChat,
   type AiChatMessage,
   type AiSuggestion,
   type MeaningLog,
 } from '../api/logs'
+import { runLogRefineTask } from '../api/aiTask'
 
 const EMPTY_CHAT_MESSAGE: AiChatMessage = {
   id: 0,
@@ -117,9 +117,9 @@ export const useHomeAiChat = (logs: Ref<MeaningLog[]>) => {
     chatLoading.value = true
 
     try {
-      const { data } = await chatWithLogAi(selectedLog.value.id, message)
-      previewSuggestion.value = data.suggestion
-      chatMessages.value = data.messages.length ? data.messages : chatMessages.value
+      const response = await runLogRefineTask(selectedLog.value.id, message)
+      previewSuggestion.value = response.suggestion
+      chatMessages.value = response.messages.length ? response.messages : chatMessages.value
       ElMessage.success('小记生成了一版预览')
     } finally {
       chatLoading.value = false

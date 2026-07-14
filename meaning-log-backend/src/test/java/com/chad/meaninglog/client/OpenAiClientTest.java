@@ -31,13 +31,14 @@ class OpenAiClientTest {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/chat/completions", this::handleCompletion);
         server.start();
-        client = new OpenAiClient(
+        OpenAiTransport transport = new OpenAiTransport(
                 RestClient.builder(),
                 new ObjectMapper(),
                 "test-api-key",
                 "http://localhost:" + server.getAddress().getPort(),
                 "test-model"
         );
+        client = new OpenAiClient(transport);
     }
 
     @AfterEach

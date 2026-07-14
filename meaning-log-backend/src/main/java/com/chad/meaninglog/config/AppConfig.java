@@ -3,11 +3,15 @@ package com.chad.meaninglog.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
+@EnableScheduling
 public class AppConfig {
 
     /**
@@ -33,5 +37,12 @@ public class AppConfig {
         executor.setAwaitTerminationSeconds(shutdownAwaitSeconds);
         executor.initialize();
         return executor;
+    }
+
+    @Bean(destroyMethod = "stop")
+    public RedisMessageListenerContainer redisMessageListenerContainer(RedisConnectionFactory connectionFactory) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+        return container;
     }
 }
