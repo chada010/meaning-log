@@ -26,8 +26,7 @@ class XiaojiChatWorkflowServiceTests {
         XiaojiChatWorkflowService service = new XiaojiChatWorkflowService(
                 mock(XiaojiChatQueryService.class),
                 supportService,
-                mock(AiService.class),
-                mock(AiRateLimiter.class)
+                mock(AiService.class)
         );
         AiChatSession session = new AiChatSession();
         session.setId(88L);
@@ -46,8 +45,7 @@ class XiaojiChatWorkflowServiceTests {
         XiaojiChatWorkflowService service = new XiaojiChatWorkflowService(
                 mock(XiaojiChatQueryService.class),
                 supportService,
-                mock(AiService.class),
-                mock(AiRateLimiter.class)
+                mock(AiService.class)
         );
         AiChatSession session = new AiChatSession();
         session.setId(88L);
@@ -67,8 +65,7 @@ class XiaojiChatWorkflowServiceTests {
         XiaojiChatWorkflowService service = new XiaojiChatWorkflowService(
                 queryService,
                 supportService,
-                aiService,
-                mock(AiRateLimiter.class)
+                aiService
         );
         UserAccount user = new UserAccount();
         MeaningLog log = new MeaningLog();
@@ -97,8 +94,7 @@ class XiaojiChatWorkflowServiceTests {
         XiaojiChatWorkflowService service = new XiaojiChatWorkflowService(
                 mock(XiaojiChatQueryService.class),
                 supportService,
-                mock(AiService.class),
-                mock(AiRateLimiter.class)
+                mock(AiService.class)
         );
         UserAccount user = new UserAccount();
         MeaningLog log = new MeaningLog();

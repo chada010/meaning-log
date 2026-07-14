@@ -25,12 +25,10 @@ public class MeaningLogReportService {
     private final AiReportRepository aiReportRepository;
     private final MeaningLogSupportService meaningLogSupportService;
     private final AiService aiService;
-    private final AiRateLimiter aiRateLimiter;
 
     @Transactional
     public AiReportResponse summarizeDay(UserAccount user, LocalDate date) {
         date = validateDailySummaryDate(date);
-        aiRateLimiter.check(user);
         List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
         AiReportResponse response = aiService.summarizeLogs("AI 当天总结", date.toString(), logs);
         return saveReport(user, AiReport.Type.DAILY, date, date, response);
@@ -39,7 +37,6 @@ public class MeaningLogReportService {
     @Transactional
     public AiReportResponse summarizePeriod(UserAccount user, LocalDate startDate, LocalDate endDate, String title) {
         validateReportDateRange(startDate, endDate);
-        aiRateLimiter.check(user);
         List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(user, startDate, endDate);
         AiReportResponse response = aiService.summarizeLogs(title, startDate + " 至 " + endDate, logs);
         return saveReport(user, inferReportType(title), startDate, endDate, response);
@@ -73,7 +70,6 @@ public class MeaningLogReportService {
             UserAccount user, LocalDate startDate, LocalDate endDate, String title
     ) {
         validateReportDateRange(startDate, endDate);
-        aiRateLimiter.check(user);
         List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateBetweenOrderByLogDateDesc(user, startDate, endDate);
         return new MeaningLogService.ReportStreamContext(
                 logs,
@@ -87,7 +83,6 @@ public class MeaningLogReportService {
     @Transactional(readOnly = true)
     public MeaningLogService.ReportStreamContext prepareDailySummaryStream(UserAccount user, LocalDate date) {
         date = validateDailySummaryDate(date);
-        aiRateLimiter.check(user);
         List<MeaningLog> logs = meaningLogRepository.findByUserAndLogDateOrderByCreatedAtDesc(user, date);
         return new MeaningLogService.ReportStreamContext(logs, date.toString(), AiReport.Type.DAILY, date, date);
     }

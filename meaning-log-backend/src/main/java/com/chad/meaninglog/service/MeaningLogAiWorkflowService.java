@@ -21,7 +21,6 @@ public class MeaningLogAiWorkflowService {
     private final MeaningLogSupportService meaningLogSupportService;
     private final MeaningLogImageService meaningLogImageService;
     private final AiService aiService;
-    private final AiRateLimiter aiRateLimiter;
 
     @Transactional(readOnly = true)
     public List<String> findAiTags(UserAccount user) {
@@ -39,14 +38,12 @@ public class MeaningLogAiWorkflowService {
 
     @Transactional(readOnly = true)
     public MeaningLogService.AnalyzeStreamContext prepareAnalyzeStream(UserAccount user, Long id) {
-        aiRateLimiter.check(user);
         MeaningLog meaningLog = meaningLogSupportService.getMeaningLog(user, id);
         return new MeaningLogService.AnalyzeStreamContext(meaningLog, meaningLogImageService.loadImages(meaningLog));
     }
 
     @Transactional
     public MeaningLogResponse generateAiForLog(UserAccount user, Long id) {
-        aiRateLimiter.check(user);
         MeaningLog meaningLog = meaningLogSupportService.getMeaningLog(user, id);
         LogAiResult result = aiService.analyzeLog(meaningLog, meaningLogImageService.loadImages(meaningLog));
         applyAiResult(meaningLog, result);
@@ -56,7 +53,6 @@ public class MeaningLogAiWorkflowService {
 
     @Transactional(readOnly = true)
     public LogAiResult previewAiForLog(UserAccount user, Long id, String message) {
-        aiRateLimiter.check(user);
         MeaningLog meaningLog = meaningLogSupportService.getMeaningLog(user, id);
         return aiService.refineLogSummary(
                 meaningLog,
