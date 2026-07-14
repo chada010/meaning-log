@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict'
-import { afterEach, beforeEach, describe, it } from 'node:test'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { StreamFetchError, streamFetch, streamFetchJson } from './stream'
 
 const encoder = new TextEncoder()
@@ -51,7 +50,7 @@ describe('streamFetch', () => {
 
     await streamFetch('/chat', {}, (chunk) => chunks.push(chunk))
 
-    assert.deepEqual(chunks, [' leading and trailing  '])
+    expect(chunks).toEqual([' leading and trailing  '])
   })
 
   it('按事件边界合并多条 data 行并保留换行', async () => {
@@ -60,7 +59,7 @@ describe('streamFetch', () => {
 
     await streamFetch('/chat', {}, (chunk) => chunks.push(chunk))
 
-    assert.deepEqual(chunks, ['first line\nsecond line'])
+    expect(chunks).toEqual(['first line\nsecond line'])
   })
 
   it('处理 session 事件后继续读取并在 done 后成功', async () => {
@@ -70,14 +69,14 @@ describe('streamFetch', () => {
 
     await streamFetch('/chat', {}, (chunk) => chunks.push(chunk), (sessionId) => sessionIds.push(sessionId))
 
-    assert.deepEqual(sessionIds, [42])
-    assert.deepEqual(chunks, ['reply'])
+    expect(sessionIds).toEqual([42])
+    expect(chunks).toEqual(['reply'])
   })
 
   it('在未收到 done 即断流时抛出可识别错误', async () => {
     mockResponse(streamResponse(['data: partial\n\n']))
 
-    await assert.rejects(streamFetch('/chat', {}, () => undefined), isStreamError('incomplete'))
+    await expect(streamFetch('/chat', {}, () => undefined)).rejects.toSatisfy(isStreamError('incomplete'))
   })
 
   it('将连接失败包装为可识别错误', async () => {
@@ -85,13 +84,13 @@ describe('streamFetch', () => {
       throw new Error('network unavailable')
     }
 
-    await assert.rejects(streamFetch('/chat', {}, () => undefined), isStreamError('connection'))
+    await expect(streamFetch('/chat', {}, () => undefined)).rejects.toSatisfy(isStreamError('connection'))
   })
 
   it('将读取失败包装为可识别错误', async () => {
     mockResponse(failingResponse(new Error('connection reset')))
 
-    await assert.rejects(streamFetch('/chat', {}, () => undefined), isStreamError('read'))
+    await expect(streamFetch('/chat', {}, () => undefined)).rejects.toSatisfy(isStreamError('read'))
   })
 })
 
@@ -101,13 +100,13 @@ describe('streamFetchJson', () => {
 
     const result = await streamFetchJson<{ title: string }>('/refine', {})
 
-    assert.deepEqual(result, { title: 'draft' })
+    expect(result).toEqual({ title: 'draft' })
   })
 
   it('在未收到 done 即断流时抛出可识别错误', async () => {
     mockResponse(streamResponse(['data: {"title":"draft"}\n\n']))
 
-    await assert.rejects(streamFetchJson('/refine', {}), isStreamError('incomplete'))
+    await expect(streamFetchJson('/refine', {})).rejects.toSatisfy(isStreamError('incomplete'))
   })
 })
 

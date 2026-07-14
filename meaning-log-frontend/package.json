@@ -5,9 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "npm run test:api && npm run test:unit",
-    "test:api": "node --experimental-loader ./test-loader.mjs --test src/api/stream.test.ts",
-    "test:unit": "vitest run",
+    "test": "vitest run",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json && vue-tsc --noEmit -p tsconfig.test.json",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview"
