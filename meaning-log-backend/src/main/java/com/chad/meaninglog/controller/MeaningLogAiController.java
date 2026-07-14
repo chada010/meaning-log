@@ -10,6 +10,8 @@ import com.chad.meaninglog.service.AiService;
 import com.chad.meaninglog.service.MeaningLogService;
 import com.chad.meaninglog.service.XiaojiChatService;
 import com.chad.meaninglog.web.SseEmitterSupport;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,6 +28,7 @@ import java.util.List;
 
 import static com.chad.meaninglog.web.WebConstants.LOCAL_FRONTEND_ORIGIN;
 
+@Tag(name = "日志 AI", description = "针对单条日志的 AI 分析、对话精修与结果落库")
 @CrossOrigin(origins = LOCAL_FRONTEND_ORIGIN)
 @RestController
 @RequiredArgsConstructor
@@ -37,6 +40,7 @@ public class MeaningLogAiController {
     private final AiService aiService;
     private final SseEmitterSupport sseEmitterSupport;
 
+    @Operation(summary = "获取用户所有 AI 标签", description = "用于标签筛选下拉")
     @GetMapping("/ai/tags")
     public List<String> findAiTags(
             @AuthenticationPrincipal UserAccount user
@@ -44,6 +48,7 @@ public class MeaningLogAiController {
         return meaningLogService.findAiTags(user);
     }
 
+    @Operation(summary = "生成日志 AI 分析（一次性返回）", description = "返回标题、总结、标签的草稿，不落库")
     @PostMapping("/{id}/ai")
     public MeaningLogResponse generateAiForLog(
             @AuthenticationPrincipal UserAccount user,
@@ -52,6 +57,7 @@ public class MeaningLogAiController {
         return meaningLogService.generateAiForLog(user, id);
     }
 
+    @Operation(summary = "生成日志 AI 分析（SSE 流式）")
     @PostMapping(value = "/{id}/ai/stream", produces = "text/event-stream")
     public SseEmitter generateAiForLogStream(
             @AuthenticationPrincipal UserAccount user,
@@ -73,6 +79,7 @@ public class MeaningLogAiController {
         }
     }
 
+    @Operation(summary = "与小记对话精修日志 AI 结果")
     @PostMapping("/{id}/ai/chat")
     public AiChatResponse previewAiForLog(
             @AuthenticationPrincipal UserAccount user,
@@ -82,6 +89,7 @@ public class MeaningLogAiController {
         return xiaojiChatService.chatWithLog(user, id, request.getMessage());
     }
 
+    @Operation(summary = "获取日志的 AI 对话历史")
     @GetMapping("/{id}/ai/chat")
     public AiChatResponse findLogAiChat(
             @AuthenticationPrincipal UserAccount user,
@@ -90,6 +98,7 @@ public class MeaningLogAiController {
         return xiaojiChatService.findLogMessages(user, id);
     }
 
+    @Operation(summary = "将 AI 结果落库到日志", description = "确认草稿后显式写入 ai_title/ai_summary/ai_tags 字段")
     @PostMapping("/{id}/ai/apply")
     public MeaningLogResponse applyAiForLog(
             @AuthenticationPrincipal UserAccount user,
@@ -100,6 +109,7 @@ public class MeaningLogAiController {
         return meaningLogService.applyAiForLog(user, id, result);
     }
 
+    @Operation(summary = "与小记对话精修日志 AI 结果（SSE 流式）")
     @PostMapping(value = "/{id}/ai/chat/stream", produces = "text/event-stream")
     public SseEmitter chatStreamForLog(
             @AuthenticationPrincipal UserAccount user,

@@ -10,6 +10,8 @@ import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.service.AiService;
 import com.chad.meaninglog.service.XiaojiChatService;
 import com.chad.meaninglog.web.SseEmitterSupport;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,6 +29,7 @@ import java.util.Map;
 import static com.chad.meaninglog.web.WebConstants.SSE_DONE_EVENT;
 import static com.chad.meaninglog.web.WebConstants.SSE_SESSION_EVENT;
 
+@Tag(name = "小记陪伴聊天", description = "开放式陪伴对话（/xiaoji），会话与消息持久化")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/xiaoji")
@@ -36,6 +39,7 @@ public class XiaojiChatController {
     private final AiService aiService;
     private final SseEmitterSupport sseEmitterSupport;
 
+    @Operation(summary = "获取当前用户全部陪伴会话")
     @GetMapping("/sessions")
     public List<AiChatSessionResponse> findGeneralSessions(
             @AuthenticationPrincipal UserAccount user
@@ -43,6 +47,7 @@ public class XiaojiChatController {
         return xiaojiChatService.findGeneralSessions(user);
     }
 
+    @Operation(summary = "获取指定会话的消息列表")
     @GetMapping("/sessions/{sessionId}/messages")
     public List<AiChatMessageResponse> findMessages(
             @AuthenticationPrincipal UserAccount user,
@@ -51,6 +56,7 @@ public class XiaojiChatController {
         return xiaojiChatService.findMessages(user, sessionId);
     }
 
+    @Operation(summary = "陪伴聊天（一次性返回）")
     @PostMapping("/chat")
     public AiChatResponse chat(
             @AuthenticationPrincipal UserAccount user,
@@ -59,6 +65,7 @@ public class XiaojiChatController {
         return xiaojiChatService.chatWithCompanion(user, request.getSessionId(), request.getMessage());
     }
 
+    @Operation(summary = "陪伴聊天（SSE 流式）")
     @PostMapping(value = "/chat/stream", produces = "text/event-stream")
     public SseEmitter chatStream(
             @AuthenticationPrincipal UserAccount user,
