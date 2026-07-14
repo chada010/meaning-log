@@ -138,3 +138,90 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 2. 前端将草稿和 AI 结果写入 localStorage（`meaning-log-pending-trial` / `meaning-log-trial-draft`）。
 3. 用户注册或登录后，前端自动调用 `persistPendingTrial()` API，原子性地创建第一条日志并附带 AI 结果。
 4. LocalStorage 草稿随即清除。
+
+## 生产部署
+
+### 架构
+
+```
+浏览器 HTTPS
+  ↓
+Vercel 静态资源 (www.chada010.freeddns.org, meaning-log.vercel.app)
+  ↓ fetch → VITE_API_BASE_URL
+Cloudflare Tunnel (trycloudflare quick tunnel)
+  ↓ CF Edge 出站到 VPS，绕过阿里云入站拦截
+VPS 47.108.155.138 (阿里云成都 2GB)
+  ├─ /etc/systemd/system/cf-tunnel.service (cloudflared)
+  └─ /opt/meaning-log/docker-compose.prod.yml
+       ├─ backend (Spring Boot :8080)
+       ├─ mysql
+       ├─ redis
+       └─ rabbitmq
+```
+
+**为什么走 Tunnel**：阿里云 ECS 未做 ICP 关联时对海外来源 80/443 有网络层拦截，CF Flexible 报 521、certbot HTTP-01 也不通。Tunnel 是 VPS 主动出站，绕开入站拦截。
+
+### VPS 访问
+
+本地 `~/.ssh/config` 已配 `myvps` 别名（ed25519 免密）：
+
+```bash
+ssh myvps
+```
+
+Claude 应直接用 `ssh myvps '<cmd>'` 免密执行远程命令，不要让用户手动跑 VPS 命令。
+
+### Tunnel URL 注意事项
+
+当前使用 `cloudflared tunnel --url http://localhost:8080` 的 **quick tunnel**，每次 `systemctl restart cf-tunnel` 都会换 URL。更新流程：
+
+1. 查当前 URL：
+   ```bash
+   ssh myvps 'grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" /var/log/cloudflared.log | tail -1'
+   ```
+2. Vercel 项目 `meaning-log` → Settings → Environment Variables → 更新 `VITE_API_BASE_URL` = `<新URL>/api`
+3. Deployments → 最新一次 → Redeploy，**务必取消勾选 `Use existing Build Cache`**，否则 env 生效但产物没重 build
+
+**稳定化方案**（未实施）：买 .top 域名接入 CF → 用 named tunnel，URL 固定。
+
+### 关键路径
+
+VPS `/opt/meaning-log/`：
+- `.env.prod` — 生产环境变量（11 字段全填）
+- `docker-compose.prod.yml`
+- `railway-dump.sql` — 从 Railway 迁出的历史数据（首次导入用，之后可归档）
+
+VPS `/etc/systemd/system/cf-tunnel.service` — Cloudflare Tunnel systemd 单元
+
+### Docker 镜像加速
+
+VPS `/etc/docker/daemon.json`：
+```json
+{"registry-mirrors":["https://docker.1ms.run","https://docker.imgdb.de"]}
+```
+daocloud / tencentyun 镜像源已失效，勿使用。
+
+### 常用命令
+
+```bash
+# 查 tunnel URL
+ssh myvps 'grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" /var/log/cloudflared.log | tail -1'
+
+# 查容器状态
+ssh myvps 'docker ps --format "table {{.Names}}\t{{.Status}}"'
+
+# 查 backend 日志
+ssh myvps 'docker compose -f /opt/meaning-log/docker-compose.prod.yml logs --tail 50 backend'
+
+# 改 .env.prod 后重启 backend
+ssh myvps 'cd /opt/meaning-log && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d backend'
+
+# 重启 tunnel（会换 URL！随后需更新 Vercel env + redeploy）
+ssh myvps 'systemctl restart cf-tunnel'
+```
+
+### 网络踩坑速查
+
+- 本地 → GitHub：直连不通，`git push` 需带代理：`git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 push`
+- VPS → GitHub：已配 `git config url."https://ghfast.top/https://github.com/".insteadOf`；`curl` release 用 `curl https://ghfast.top/https://github.com/...`
+- VPS → `1.1.1.1` UDP 53 超时：`dig` 用 `@223.5.5.5`（阿里云 DNS）
