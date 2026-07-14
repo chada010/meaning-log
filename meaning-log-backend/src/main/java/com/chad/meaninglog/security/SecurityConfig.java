@@ -2,6 +2,7 @@ package com.chad.meaninglog.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -16,10 +17,13 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +41,9 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ObjectMapper objectMapper;
+
+    @Value("${app.cors.additional-origins:}")
+    private String additionalOriginsCsv;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -63,13 +70,20 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
+        List<String> allowedOrigins = new ArrayList<>(List.of(
                 LOCAL_FRONTEND_ORIGIN,
                 LOOPBACK_FRONTEND_ORIGIN,
                 PRIMARY_VERCEL_ORIGIN,
                 FREEDNS_ORIGIN,
                 FREEDNS_WWW_ORIGIN
         ));
+        if (StringUtils.hasText(additionalOriginsCsv)) {
+            Arrays.stream(additionalOriginsCsv.split(","))
+                    .map(String::trim)
+                    .filter(origin -> !origin.isEmpty())
+                    .forEach(allowedOrigins::add);
+        }
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedOriginPatterns(List.of(VERCEL_ORIGIN_PATTERN));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE));
