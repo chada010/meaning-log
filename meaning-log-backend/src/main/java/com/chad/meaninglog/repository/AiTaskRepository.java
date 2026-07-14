@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.chad.meaninglog.entity.AiTask;
 import com.chad.meaninglog.entity.AiTaskStatus;
 
+import java.time.LocalDateTime;
+
 public interface AiTaskRepository extends BaseMapper<AiTask> {
 
     default AiTask save(AiTask task) {
@@ -21,5 +23,13 @@ public interface AiTaskRepository extends BaseMapper<AiTask> {
                 .eq(AiTask::getId, id)
                 .eq(AiTask::getStatus, AiTaskStatus.PENDING)
                 .set(AiTask::getStatus, AiTaskStatus.RUNNING));
+    }
+
+    default int reapStaleRunning(LocalDateTime cutoff, String errorMessage) {
+        return update(null, new LambdaUpdateWrapper<AiTask>()
+                .eq(AiTask::getStatus, AiTaskStatus.RUNNING)
+                .lt(AiTask::getUpdatedAt, cutoff)
+                .set(AiTask::getStatus, AiTaskStatus.FAILED)
+                .set(AiTask::getErrorMessage, errorMessage));
     }
 }

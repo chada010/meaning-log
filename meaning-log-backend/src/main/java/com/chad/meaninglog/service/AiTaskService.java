@@ -15,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -36,7 +38,20 @@ public class AiTaskService {
         task.setRetryCount(0);
         aiTaskRepository.insert(task);
 
-        aiTaskProducer.send(new AiTaskMessage(task.getId(), type));
+        // 事务提交后再投递 MQ，避免 dual-write：
+        // 若在事务内直接 send，事务回滚时消息已发出会成为消费不到 DB 记录的幽灵任务；
+        // 消费者也可能在事务提交前先 selectById 拿不到（读不到未提交），直接 drop message。
+        AiTaskMessage message = new AiTaskMessage(task.getId(), type);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    aiTaskProducer.send(message);
+                }
+            });
+        } else {
+            aiTaskProducer.send(message);
+        }
         return task;
     }
 
