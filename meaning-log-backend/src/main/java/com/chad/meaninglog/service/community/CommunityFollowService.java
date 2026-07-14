@@ -23,6 +23,7 @@ public class CommunityFollowService {
     private final UserAccountRepository userAccountRepository;
     private final PublicLogRepository publicLogRepository;
     private final CommunityRedisService redis;
+    private final NotificationService notificationService;
 
     @Transactional
     public boolean follow(UserAccount follower, Long followeeId) {
@@ -45,6 +46,7 @@ public class CommunityFollowService {
             return false;
         }
         redis.addFollow(follower.getId(), followeeId);
+        notificationService.notifyFollow(follower, followeeId);
         return true;
     }
 

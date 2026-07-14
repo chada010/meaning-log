@@ -22,6 +22,7 @@ public class CommunityLikeService {
     private final PostLikeRepository postLikeRepository;
     private final CommunityRedisService redis;
     private final HotScoreCalculator hotScoreCalculator;
+    private final NotificationService notificationService;
 
     public record LikeResult(boolean liked, long likeCount) {}
 
@@ -46,6 +47,7 @@ public class CommunityLikeService {
         } catch (DuplicateKeyException ignore) {
             // 由唯一索引兜底, 已有记录直接放行
         }
+        notificationService.notifyLike(user, publicLog.getUserId(), publicLogId);
         return new LikeResult(true, likes);
     }
 

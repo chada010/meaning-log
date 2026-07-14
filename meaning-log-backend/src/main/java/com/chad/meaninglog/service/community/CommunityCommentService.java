@@ -32,6 +32,7 @@ public class CommunityCommentService {
     private final SensitiveWordFilter sensitiveWordFilter;
     private final CommunityRedisService redis;
     private final HotScoreCalculator hotScoreCalculator;
+    private final NotificationService notificationService;
 
     @Transactional
     public CommentResponse create(UserAccount user, Long publicLogId, CommentRequest request) {
@@ -63,6 +64,7 @@ public class CommunityCommentService {
         redis.updateHotScore(publicLog.getId(),
                 hotScoreCalculator.score(likes, comments, views, publicLog.getPublishedAt()));
 
+        notificationService.notifyComment(user, publicLog.getUserId(), publicLogId, comment.getId(), content);
         return CommentResponse.from(comment, user);
     }
 
