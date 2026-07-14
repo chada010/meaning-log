@@ -47,13 +47,13 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 | `controller/` | REST 接口，统一前缀 `/api`。已登录用户通过 `@AuthenticationPrincipal UserAccount user` 注入。 |
 | `service/` | 业务逻辑。`AiService` 负责编排 AI 调用；`AiRateLimiter` 通过 Redis 实现按 IP 限流。 |
 | `repository/` | MyBatis-Plus `BaseMapper` 扩展。已开启下划线转驼峰映射。 |
-| `client/OpenAiClient` | 所有 AI 请求的唯一入口，使用 Spring `RestClient` 调用 DashScope 的 OpenAI 兼容接口。 |
+| `client/OpenAiClient` | AI 业务编排入口（Prompt 组装、消息拼接）；底层由 `client/OpenAiTransport` 通过 Spring `RestClient` 调用 DeepSeek 的 OpenAI 兼容接口，并挂 Resilience4j `deepseek` 实例（Retry + CircuitBreaker + fallback）。 |
 | `security/` | 无状态 JWT，通过 `JwtAuthenticationFilter` 实现。`UserAccount` 实现 `UserDetails`。 |
 | `dto/` | 请求/响应对象，与 Entity 分离，响应 DTO 用静态 `from(entity)` 方法转换。 |
 
 **无需 JWT 的公开接口**：`/api/auth/register`、`/api/auth/login`、`/api/auth/reset-password`、`/api/auth/send-code`、`/api/trial/**`
 
-**AI 服务商**：阿里云 DashScope（Qwen），通过 `ai.*` 配置项注入。客户端向 `${ai.base-url}/chat/completions` 发送 OpenAI 格式请求。所有提示词以静态常量形式定义在 `OpenAiClient` 中。
+**AI 服务商**：DeepSeek，通过 `app.ai.*` 配置项注入。客户端向 `${app.ai.base-url}/chat/completions` 发送 OpenAI 格式请求（DeepSeek 兼容 OpenAI Chat Completions 协议）。所有提示词以静态常量形式定义在 `OpenAiClient` 中。
 
 **Redis** 用于 AI 限流（`AiRateLimiter`）和邮箱验证码存储（`EmailVerificationService`），不做 Session 或缓存。
 
@@ -87,9 +87,9 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `DASHSCOPE_API_KEY` | properties 中硬编码的开发 key | AI 功能必填 |
-| `AI_MODEL` | `qwen-plus` | DashScope 模型名 |
-| `AI_BASE_URL` | DashScope 接口地址 | 可替换为其他 OpenAI 兼容服务商 |
+| `DEEPSEEK_API_KEY` | 无（缺失时启动即报错） | AI 功能必填，DeepSeek API Key |
+| `APP_AI_MODEL` | `deepseek-chat` | DeepSeek 模型名 |
+| `APP_AI_BASE_URL` | `https://api.deepseek.com/v1` | 可替换为其他 OpenAI 兼容服务商 |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost:6379` | |
 | `JWT_SECRET` | 开发占位符 | 生产环境必须替换 |
 | `AI_RATE_LIMIT_MAX_REQUESTS` | `5` | 每个 IP 每窗口期最大请求数 |
