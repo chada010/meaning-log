@@ -25,10 +25,15 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 !meaning-log-frontend/.env.local.example
 application-local.properties
 application-docker.properties
 application-prod.properties
+
+# ===== Database dumps (contain user data) =====
+*.sql
+!meaning-log-backend/src/main/resources/**/*.sql
 
 # ===== OS =====
 .DS_Store

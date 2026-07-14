@@ -1,0 +1,111 @@
+# 生产环境 Docker Compose(自建 VPS)
+# 使用: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# 依赖:
+#   - .env.prod (从 .env.prod.example 复制并填值)
+#   - 宿主机 Nginx 反代 127.0.0.1:8080 → api.<你的域名>
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command:
+      - --innodb-buffer-pool-size=128M
+      - --innodb-log-file-size=48M
+      - --skip-log-bin
+      - --max-connections=64
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - 100mb
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./meaning-log-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      # database
+      MYSQLHOST: mysql
+      MYSQLPORT: 3306
+      MYSQLDATABASE: ${MYSQL_DATABASE}
+      MYSQLUSER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      # cache
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # message queue
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      # auth
+      JWT_SECRET: ${JWT_SECRET}
+      # AI
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      APP_AI_MODEL: ${APP_AI_MODEL:-deepseek-chat}
+      APP_AI_BASE_URL: ${APP_AI_BASE_URL:-https://api.deepseek.com/v1}
+      # mail
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      # CORS(加你的 Vercel 域名 / 自建前端域名,逗号分隔)
+      APP_CORS_ADDITIONAL_ORIGINS: ${APP_CORS_ADDITIONAL_ORIGINS:-}
+      # JVM
+      JAVA_OPTS: "-Xmx384m -Xms256m"
+    ports:
+      # 只 bind localhost,不暴露到公网;Nginx 在宿主机反代
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:
