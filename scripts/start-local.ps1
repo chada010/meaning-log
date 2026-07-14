@@ -113,7 +113,7 @@ Assert-ListeningPortAvailable 5173 'frontend'
 $composeProjectNameOverride = Get-LocalEnvValue $localEnv 'LOCAL_COMPOSE_PROJECT_NAME' ''
 $composeArguments = Get-LocalComposeArguments $projectRoot $composeProjectNameOverride
 $composeProjectName = Get-LocalComposeProjectName $projectRoot $composeProjectNameOverride
-$managedComposeServices = @('mysql', 'redis')
+$managedComposeServices = @('mysql', 'redis', 'rabbitmq')
 $existingComposeServices = @(& docker @composeArguments ps --services --all)
 Assert-NativeCommandSucceeded 'Reading existing Docker Compose services' $LASTEXITCODE
 $runningComposeServices = @(& docker @composeArguments ps --services --filter status=running)
@@ -153,6 +153,10 @@ try {
         SPRING_DATASOURCE_URL = "jdbc:mysql://localhost:$($localEnv.MYSQL_PORT)/$($localEnv.MYSQL_DATABASE)?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
         SPRING_DATA_REDIS_HOST = 'localhost'
         SPRING_DATA_REDIS_PORT = $localEnv.REDIS_PORT
+        SPRING_RABBITMQ_HOST = 'localhost'
+        SPRING_RABBITMQ_PORT = Get-LocalEnvValue $localEnv 'RABBITMQ_PORT' '5672'
+        SPRING_RABBITMQ_USERNAME = Get-LocalEnvValue $localEnv 'RABBITMQ_USERNAME' 'guest'
+        SPRING_RABBITMQ_PASSWORD = Get-LocalEnvValue $localEnv 'RABBITMQ_PASSWORD' 'guest'
         MAIL_HOST = $localEnv.MAIL_HOST
         MAIL_PORT = $localEnv.MAIL_PORT
         MAIL_USERNAME = $localEnv.MAIL_USERNAME
