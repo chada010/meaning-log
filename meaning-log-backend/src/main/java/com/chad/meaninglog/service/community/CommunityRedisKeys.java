@@ -9,7 +9,6 @@ public final class CommunityRedisKeys {
 
     public static final String HOT_GLOBAL = "community:hot:global";
     public static final String DIRTY_COUNTERS = "community:dirty:counters";
-    public static final String NOTIFY_CHANNEL_PREFIX = "community:notify:";
 
     private static final String FEED_USER_PREFIX = "community:feed:user:";
     private static final String LIKE_BITMAP_PREFIX = "community:like:bitmap:";
@@ -58,9 +57,5 @@ public final class CommunityRedisKeys {
 
     public static String publishLock(Long userId) {
         return PUBLISH_LOCK_PREFIX + userId;
-    }
-
-    public static String notifyChannel(Long userId) {
-        return NOTIFY_CHANNEL_PREFIX + userId;
     }
 }

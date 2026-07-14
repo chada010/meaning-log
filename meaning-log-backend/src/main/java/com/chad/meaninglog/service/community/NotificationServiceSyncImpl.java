@@ -2,6 +2,8 @@ package com.chad.meaninglog.service.community;
 
 import com.chad.meaninglog.entity.Notification;
 import com.chad.meaninglog.entity.UserAccount;
+import com.chad.meaninglog.mq.NotificationEnvelope;
+import com.chad.meaninglog.mq.producer.NotificationProducer;
 import com.chad.meaninglog.repository.NotificationRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +14,8 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 
 /**
- * 同步实现: 写 DB + Redis Pub/Sub 广播。Track 2 (MQ) 合入后可替换为投递到 community.notification 队列。
+ * 通知业务实现: 事务内写 DB, afterCommit 通过 RabbitMQ fanout 广播到所有 web 节点, 由本机
+ * {@link NotificationSseManager} 推 SSE. 参见 {@link NotificationProducer} 的事务时机说明.
  */
 @Service
 @RequiredArgsConstructor
@@ -22,7 +25,7 @@ public class NotificationServiceSyncImpl implements NotificationService {
     private static final int SNIPPET_MAX = 60;
 
     private final NotificationRepository notificationRepository;
-    private final CommunityRedisService redis;
+    private final NotificationProducer notificationProducer;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -85,7 +88,7 @@ public class NotificationServiceSyncImpl implements NotificationService {
                     "content", n.getContent() == null ? "" : n.getContent(),
                     "createdAt", n.getCreatedAt() == null ? "" : n.getCreatedAt().toString()
             ));
-            redis.publishNotification(n.getReceiverId(), payload);
+            notificationProducer.send(new NotificationEnvelope(n.getReceiverId(), payload));
         } catch (JsonProcessingException e) {
             log.warn("发布通知失败: receiverId={}", n.getReceiverId(), e);
         }

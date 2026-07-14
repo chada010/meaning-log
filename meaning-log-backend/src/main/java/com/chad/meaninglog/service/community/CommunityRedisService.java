@@ -228,12 +228,6 @@ public class CommunityRedisService {
         redisTemplate.execute(RELEASE_LOCK_SCRIPT, List.of(key), token);
     }
 
-    // -------- Pub/Sub 通知 --------
-
-    public void publishNotification(Long receiverId, String payload) {
-        redisTemplate.convertAndSend(CommunityRedisKeys.notifyChannel(receiverId), payload);
-    }
-
     // -------- 批量读 (消除 Feed / HotScoreJob 里的 N+1 Redis RTT) --------
 
     public record CommunityCounts(long like, long comment, long view) {}
