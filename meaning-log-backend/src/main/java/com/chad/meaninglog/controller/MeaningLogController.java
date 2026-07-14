@@ -6,6 +6,8 @@ import com.chad.meaninglog.dto.MeaningLogResponse;
 import com.chad.meaninglog.entity.LogImage;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.service.MeaningLogService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -30,6 +32,7 @@ import java.util.List;
 
 import static com.chad.meaninglog.web.WebConstants.LOCAL_FRONTEND_ORIGIN;
 
+@Tag(name = "日志", description = "日志的增删改查与图片、导航、收藏等相关操作")
 @CrossOrigin(origins = LOCAL_FRONTEND_ORIGIN)
 @RestController
 @RequiredArgsConstructor
@@ -38,6 +41,7 @@ public class MeaningLogController {
 
     private final MeaningLogService meaningLogService;
 
+    @Operation(summary = "查询日志列表", description = "支持按日期、关键词、标签、收藏筛选")
     @GetMapping
     public List<MeaningLogResponse> findAll(
             @AuthenticationPrincipal UserAccount user,
@@ -54,6 +58,7 @@ public class MeaningLogController {
         return meaningLogService.findAll(user, date, keyword, tag, favorite);
     }
 
+    @Operation(summary = "获取日志详情")
     @GetMapping("/{id}")
     public MeaningLogResponse findById(
             @AuthenticationPrincipal UserAccount user,
@@ -62,6 +67,7 @@ public class MeaningLogController {
         return meaningLogService.findById(user, id);
     }
 
+    @Operation(summary = "获取日志图片二进制", description = "返回原始 content-type，可直接嵌入 <img>")
     @GetMapping("/images/{imageId}")
     public ResponseEntity<byte[]> findImage(
             @AuthenticationPrincipal UserAccount user,
@@ -73,6 +79,7 @@ public class MeaningLogController {
                 .body(image.getData());
     }
 
+    @Operation(summary = "获取上一篇/下一篇日志导航信息")
     @GetMapping("/{id}/navigation")
     public LogNavigationResponse findNavigation(
             @AuthenticationPrincipal UserAccount user,
@@ -81,6 +88,7 @@ public class MeaningLogController {
         return meaningLogService.findNavigation(user, id);
     }
 
+    @Operation(summary = "创建日志")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public MeaningLogResponse create(
@@ -90,6 +98,7 @@ public class MeaningLogController {
         return meaningLogService.create(user, request);
     }
 
+    @Operation(summary = "更新日志")
     @PutMapping("/{id}")
     public MeaningLogResponse update(
             @AuthenticationPrincipal UserAccount user,
@@ -99,6 +108,7 @@ public class MeaningLogController {
         return meaningLogService.update(user, id, request);
     }
 
+    @Operation(summary = "更新日志收藏状态")
     @PutMapping("/{id}/favorite")
     public MeaningLogResponse updateFavorite(
             @AuthenticationPrincipal UserAccount user,
@@ -108,6 +118,7 @@ public class MeaningLogController {
         return meaningLogService.updateFavorite(user, id, favorite);
     }
 
+    @Operation(summary = "删除日志")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(

@@ -1,0 +1,51 @@
+# Production profile 模板：所有敏感项必须通过环境变量注入，不提供默认值。
+# 启动方式：java -jar meaning-log-backend.jar --spring.profiles.active=prod
+#           或 SPRING_PROFILES_ACTIVE=prod java -jar ...
+
+# ---- 数据库 ----
+# 生产环境必须显式提供以下变量，否则启动即失败：
+#   MYSQLHOST / MYSQLPORT / MYSQLDATABASE / MYSQLUSER / DB_PASSWORD
+spring.datasource.url=jdbc:mysql://${MYSQLHOST}:${MYSQLPORT:3306}/${MYSQLDATABASE}?useUnicode=true&characterEncoding=utf8&useSSL=true&requireSSL=false&allowPublicKeyRetrieval=false&serverTimezone=Asia/Shanghai
+spring.datasource.username=${MYSQLUSER}
+spring.datasource.password=${DB_PASSWORD}
+
+# ---- Redis ----
+spring.data.redis.host=${REDIS_HOST}
+spring.data.redis.port=${REDIS_PORT:6379}
+spring.data.redis.password=${REDIS_PASSWORD}
+
+# ---- JWT ----
+# 长度至少 32 字节的 Base64 编码密钥；泄露后必须立即轮换并重启
+jwt.secret=${JWT_SECRET}
+jwt.expiration-ms=${JWT_EXPIRATION_MS:86400000}
+
+# ---- AI ----
+app.ai.api-key=${DEEPSEEK_API_KEY}
+app.ai.base-url=${APP_AI_BASE_URL:https://api.deepseek.com/v1}
+app.ai.model=${APP_AI_MODEL:deepseek-chat}
+
+# ---- Mail (Resend) ----
+spring.mail.host=${MAIL_HOST:smtp.resend.com}
+spring.mail.port=${MAIL_PORT:2465}
+spring.mail.username=${MAIL_USERNAME:resend}
+spring.mail.password=${MAIL_PASSWORD}
+mail.from=${MAIL_FROM}
+
+# ---- 反向代理白名单 ----
+# 生产必须显式列出可信代理 CIDR，否则不解析 X-Forwarded-For
+app.trusted-proxy-cidrs=${TRUSTED_PROXY_CIDRS}
+auth.trusted-proxy-cidrs=${AUTH_TRUSTED_PROXY_CIDRS}
+
+# ---- 日志 ----
+logging.file.path=${LOG_PATH:/var/log/meaning-log}
+logging.level.com.chad.meaninglog=INFO
+mybatis-plus.configuration.log-impl=org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+# ---- Flyway ----
+# 生产不允许 baseline-on-migrate 静默通过（避免遗漏迁移）；如需迁移已有库需手动 baseline
+spring.flyway.baseline-on-migrate=false
+
+# ---- Actuator ----
+# TODO: 生产收敛端点范围，敏感端点走独立 basic-auth 或 nginx 白名单
+management.endpoints.web.exposure.include=health,info,prometheus
+management.endpoint.health.show-details=never

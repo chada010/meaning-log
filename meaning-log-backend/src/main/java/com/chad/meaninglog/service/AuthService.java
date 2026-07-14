@@ -9,6 +9,7 @@ import com.chad.meaninglog.repository.UserAccountRepository;
 import com.chad.meaninglog.security.JwtService;
 import com.chad.meaninglog.util.PasswordHasher;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,7 @@ import java.util.Locale;
 
 import static com.chad.meaninglog.util.EmailNormalizer.normalize;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -46,6 +48,7 @@ public class AuthService {
         user.setUsername(request.getUsername().trim());
         user.setPasswordHash(passwordHasher.hash(request.getPassword()));
         UserAccount savedUser = userAccountRepository.save(user);
+        log.info("User registered: id={}, email={}", savedUser.getId(), email);
         return createAuthResponse(savedUser);
     }
 
@@ -59,17 +62,25 @@ public class AuthService {
         UserAccount user;
         if (isEmailIdentifier) {
             user = userAccountRepository.findByEmail(principal)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password"));
+                    .orElseThrow(() -> {
+                        log.warn("Login failed (user not found): principal={}, source={}", principal, sourceAddress);
+                        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password");
+                    });
         } else {
             user = userAccountRepository.findByUsername(identifier)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password"));
+                    .orElseThrow(() -> {
+                        log.warn("Login failed (user not found): principal={}, source={}", principal, sourceAddress);
+                        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password");
+                    });
         }
 
         if (!passwordHasher.matches(request.getPassword(), user.getPasswordHash())) {
+            log.warn("Login failed (bad password): userId={}, source={}", user.getId(), sourceAddress);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username/email or password");
         }
 
         loginAttemptService.clearFailures(principal, sourceAddress);
+        log.info("Login success: userId={}", user.getId());
         return createAuthResponse(user);
     }
 
@@ -83,6 +94,7 @@ public class AuthService {
         user.setPasswordHash(passwordHasher.hash(request.getNewPassword()));
         user.setTokenVersion(user.getTokenVersion() + 1);
         userAccountRepository.save(user);
+        log.info("Password reset: userId={}", user.getId());
     }
 
     public AuthResponse createAuthResponse(UserAccount user) {

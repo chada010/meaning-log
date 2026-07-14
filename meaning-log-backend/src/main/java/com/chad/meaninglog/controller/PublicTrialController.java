@@ -7,6 +7,8 @@ import com.chad.meaninglog.service.AiRateLimiter;
 import com.chad.meaninglog.service.AiService;
 import com.chad.meaninglog.web.ClientIpResolver;
 import com.chad.meaninglog.web.SseEmitterSupport;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import static com.chad.meaninglog.web.WebConstants.LOCAL_FRONTEND_ORIGIN;
  * 游客试用：未登录用户可写一条临时日志并体验一次 AI 整理。
  * 不落库，仅返回 AI 结果；按 IP 限流防止滥用。
  */
+@Tag(name = "游客试用", description = "未登录用户体验 AI 整理，按 IP 限流，不落库")
 @CrossOrigin(origins = LOCAL_FRONTEND_ORIGIN)
 @RestController
 @RequiredArgsConstructor
@@ -36,6 +39,7 @@ public class PublicTrialController {
     private final SseEmitterSupport sseEmitterSupport;
     private final ClientIpResolver clientIpResolver;
 
+    @Operation(summary = "游客提交日志换取一次 AI 分析", description = "不落库，仅返回结果")
     @PostMapping("/analyze")
     public LogAiResult analyze(
             @Valid @RequestBody TrialAnalyzeRequest request,
@@ -52,6 +56,7 @@ public class PublicTrialController {
         return aiService.analyzeLog(log);
     }
 
+    @Operation(summary = "游客体验 AI 分析（SSE 流式）")
     @PostMapping(value = "/analyze/stream", produces = "text/event-stream")
     public SseEmitter analyzeStream(
             @Valid @RequestBody TrialAnalyzeRequest request,

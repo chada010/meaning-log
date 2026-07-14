@@ -10,6 +10,8 @@ import com.chad.meaninglog.service.MeaningLogService;
 import com.chad.meaninglog.service.XiaojiChatService;
 import com.chad.meaninglog.web.SseEmitterSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,6 +31,7 @@ import java.util.List;
 import static com.chad.meaninglog.web.WebConstants.LOCAL_FRONTEND_ORIGIN;
 import static com.chad.meaninglog.web.WebConstants.SSE_DONE_EVENT;
 
+@Tag(name = "AI 报告", description = "日报、周期报告的生成、精修与落库")
 @CrossOrigin(origins = LOCAL_FRONTEND_ORIGIN)
 @RestController
 @RequiredArgsConstructor
@@ -41,6 +44,7 @@ public class MeaningLogReportController {
     private final SseEmitterSupport sseEmitterSupport;
     private final ObjectMapper objectMapper;
 
+    @Operation(summary = "生成单日 AI 总结", description = "date 不传则默认今天")
     @PostMapping("/ai/daily-summary")
     public AiReportResponse summarizeDay(
             @AuthenticationPrincipal UserAccount user,
@@ -49,6 +53,7 @@ public class MeaningLogReportController {
         return meaningLogService.summarizeDay(user, meaningLogService.parseDailySummaryDate(date));
     }
 
+    @Operation(summary = "生成周期 AI 报告", description = "传入 startDate 与 endDate 汇总时间段内日志")
     @PostMapping("/ai/report")
     public AiReportResponse summarizePeriod(
             @AuthenticationPrincipal UserAccount user,
@@ -61,6 +66,7 @@ public class MeaningLogReportController {
         return meaningLogService.summarizePeriod(user, dateRange.startDate(), dateRange.endDate(), title);
     }
 
+    @Operation(summary = "获取所有 AI 报告列表")
     @GetMapping("/ai/reports")
     public List<AiReportResponse> findReports(
             @AuthenticationPrincipal UserAccount user
@@ -68,6 +74,7 @@ public class MeaningLogReportController {
         return meaningLogService.findReports(user);
     }
 
+    @Operation(summary = "获取指定 AI 报告详情")
     @GetMapping("/ai/reports/{reportId}")
     public AiReportResponse findReport(
             @AuthenticationPrincipal UserAccount user,
@@ -76,6 +83,7 @@ public class MeaningLogReportController {
         return meaningLogService.findReport(user, reportId);
     }
 
+    @Operation(summary = "将 AI 报告精修结果落库")
     @PostMapping("/ai/reports/{reportId}/apply")
     public AiReportResponse applyReport(
             @AuthenticationPrincipal UserAccount user,

@@ -2,6 +2,7 @@ package com.chad.meaninglog.service;
 
 import com.chad.meaninglog.entity.UserAccount;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -11,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiRateLimiter {
@@ -44,12 +46,14 @@ public class AiRateLimiter {
                 redisTemplate.expire(key, Duration.ofSeconds(window));
             }
             if (count != null && count > limit) {
+                log.warn("AI rate limit hit: key={}, count={}, limit={}, window={}s", key, count, limit, window);
                 throw new ResponseStatusException(
                         HttpStatus.TOO_MANY_REQUESTS,
                         "AI requests are too frequent. Please try again later."
                 );
             }
         } catch (RedisConnectionFailureException ex) {
+            log.error("AI rate limiter Redis unavailable: key={}", key, ex);
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "AI 服务暂时不可用，日志仍可正常记录",
