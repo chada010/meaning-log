@@ -97,19 +97,40 @@ public class CommunityFeedService {
                 : userAccountRepository.selectBatchIds(authorIds).stream()
                 .collect(Collectors.toMap(UserAccount::getId, u -> u));
 
-        return publicLogIds.stream()
+        List<PublicLog> visible = publicLogIds.stream()
                 .map(publicLogMap::get)
                 .filter(p -> p != null && PublicLog.Status.VISIBLE.name().equals(p.getStatus()))
+                .toList();
+        if (visible.isEmpty()) {
+            return List.of();
+        }
+
+        // 批量把每篇帖子的 like/comment/view 计数 + viewer 点赞状态 + viewer 关注作者状态
+        // 3 次网络往返完成 (MGET / GETBIT pipeline / SMISMEMBER), 而不是每帖 5 次
+        List<Long> visibleIds = visible.stream().map(PublicLog::getId).toList();
+        Set<Long> visibleAuthorIds = visible.stream()
+                .map(PublicLog::getUserId)
+                .collect(Collectors.toSet());
+        Map<Long, CommunityRedisService.CommunityCounts> countsMap = redis.batchGetCounts(visibleIds);
+        Set<Long> likedIds = viewer == null
+                ? Collections.emptySet()
+                : redis.batchHasLiked(visibleIds, viewer.getId());
+        Set<Long> followedAuthorIds = viewer == null
+                ? Collections.emptySet()
+                : redis.batchIsFollowing(viewer.getId(), visibleAuthorIds);
+
+        return visible.stream()
                 .map(p -> {
                     MeaningLog log = logMap.get(p.getLogId());
                     UserAccount author = authorMap.get(p.getUserId());
-                    long likes = redis.getCount(CommunityRedisKeys.countLike(p.getId()));
-                    long comments = redis.getCount(CommunityRedisKeys.countComment(p.getId()));
-                    long views = redis.getCount(CommunityRedisKeys.countView(p.getId()));
-                    boolean liked = viewer != null && redis.hasLiked(p.getId(), viewer.getId());
-                    boolean following = viewer != null && !viewer.getId().equals(p.getUserId())
-                            && redis.isFollowing(viewer.getId(), p.getUserId());
-                    return FeedItemResponse.from(p, log, author, likes, comments, views, liked, following);
+                    CommunityRedisService.CommunityCounts c = countsMap.getOrDefault(
+                            p.getId(), new CommunityRedisService.CommunityCounts(0L, 0L, 0L));
+                    boolean liked = likedIds.contains(p.getId());
+                    boolean following = viewer != null
+                            && !viewer.getId().equals(p.getUserId())
+                            && followedAuthorIds.contains(p.getUserId());
+                    return FeedItemResponse.from(p, log, author,
+                            c.like(), c.comment(), c.view(), liked, following);
                 })
                 .toList();
     }

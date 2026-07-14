@@ -2,6 +2,8 @@ package com.chad.meaninglog.service.community;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.connection.StringRedisConnection;
+import org.springframework.data.redis.core.RedisOperations;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -11,8 +13,10 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -230,7 +234,117 @@ public class CommunityRedisService {
         redisTemplate.convertAndSend(CommunityRedisKeys.notifyChannel(receiverId), payload);
     }
 
+    // -------- 批量读 (消除 Feed / HotScoreJob 里的 N+1 Redis RTT) --------
+
+    public record CommunityCounts(long like, long comment, long view) {}
+
+    /**
+     * 一次 MGET 拉齐 N 篇帖子的 like/comment/view 计数, 把 3N 次 RTT 降为 1 次.
+     */
+    public Map<Long, CommunityCounts> batchGetCounts(Collection<Long> publicLogIds) {
+        if (publicLogIds == null || publicLogIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Long> ordered = new ArrayList<>(new HashSet<>(publicLogIds));
+        List<String> keys = new ArrayList<>(ordered.size() * 3);
+        for (Long id : ordered) {
+            keys.add(CommunityRedisKeys.countLike(id));
+            keys.add(CommunityRedisKeys.countComment(id));
+            keys.add(CommunityRedisKeys.countView(id));
+        }
+        List<String> values = redisTemplate.opsForValue().multiGet(keys);
+        Map<Long, CommunityCounts> map = new HashMap<>(ordered.size());
+        for (int i = 0; i < ordered.size(); i++) {
+            long like = parseLong(values == null ? null : values.get(i * 3));
+            long comment = parseLong(values == null ? null : values.get(i * 3 + 1));
+            long view = parseLong(values == null ? null : values.get(i * 3 + 2));
+            map.put(ordered.get(i), new CommunityCounts(like, comment, view));
+        }
+        return map;
+    }
+
+    /**
+     * 用 pipeline 把 N 次 GETBIT 打包成 1 次 RTT, 返回 viewer 已点赞的帖子 id 集合.
+     */
+    public Set<Long> batchHasLiked(Collection<Long> publicLogIds, Long userId) {
+        if (userId == null || publicLogIds == null || publicLogIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        List<Long> ordered = new ArrayList<>(new HashSet<>(publicLogIds));
+        List<Object> results = redisTemplate.executePipelined(new SessionCallback<Object>() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public <K, V> Object execute(RedisOperations<K, V> ops) {
+                RedisOperations<String, String> str = (RedisOperations<String, String>) ops;
+                for (Long id : ordered) {
+                    str.opsForValue().getBit(CommunityRedisKeys.likeBitmap(id), userId);
+                }
+                return null;
+            }
+        });
+        Set<Long> liked = new HashSet<>();
+        for (int i = 0; i < ordered.size() && i < results.size(); i++) {
+            if (Boolean.TRUE.equals(results.get(i))) {
+                liked.add(ordered.get(i));
+            }
+        }
+        return liked;
+    }
+
+    /**
+     * 用 SMISMEMBER 一次 RTT 判断 viewer 关注了哪些 author, 返回已关注的 author id 集合.
+     */
+    public Set<Long> batchIsFollowing(Long viewerId, Collection<Long> authorIds) {
+        if (viewerId == null || authorIds == null || authorIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        List<Long> ordered = new ArrayList<>(new HashSet<>(authorIds));
+        Object[] members = new Object[ordered.size()];
+        for (int i = 0; i < ordered.size(); i++) {
+            members[i] = String.valueOf(ordered.get(i));
+        }
+        Map<Object, Boolean> memberships = redisTemplate.opsForSet()
+                .isMember(CommunityRedisKeys.following(viewerId), members);
+        Set<Long> following = new HashSet<>();
+        if (memberships == null) {
+            return following;
+        }
+        for (Long id : ordered) {
+            if (Boolean.TRUE.equals(memberships.get(String.valueOf(id)))) {
+                following.add(id);
+            }
+        }
+        return following;
+    }
+
+    /**
+     * 用 pipeline 把 N 次 ZADD 打包成 1 次 RTT, HotScoreJob 重算 K 篇帖子时把 K 次往返降为 1 次.
+     */
+    public void batchUpdateHotScore(Map<Long, Double> scoreById) {
+        if (scoreById == null || scoreById.isEmpty()) {
+            return;
+        }
+        redisTemplate.executePipelined((org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+            StringRedisConnection src = (StringRedisConnection) connection;
+            for (Map.Entry<Long, Double> entry : scoreById.entrySet()) {
+                src.zAdd(CommunityRedisKeys.HOT_GLOBAL, entry.getValue(), String.valueOf(entry.getKey()));
+            }
+            return null;
+        });
+    }
+
     // -------- helpers --------
+
+    private static long parseLong(String value) {
+        if (value == null) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
 
     private static List<Long> toLongList(Set<String> raw) {
         if (raw == null || raw.isEmpty()) {
