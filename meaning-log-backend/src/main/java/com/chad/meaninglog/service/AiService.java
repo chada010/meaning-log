@@ -6,12 +6,14 @@ import com.chad.meaninglog.dto.LogAiResult;
 import com.chad.meaninglog.entity.LogImage;
 import com.chad.meaninglog.entity.MeaningLog;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiService {
@@ -22,14 +24,20 @@ public class AiService {
         return analyzeLog(log, List.of());
     }
 
-    public LogAiResult analyzeLog(MeaningLog log, List<LogImage> images) {
-        return openAiClient.analyzeLog(
-                log.getLogDate().toString(),
-                log.getTitle(),
-                log.getMood(),
-                log.getContent(),
+    public LogAiResult analyzeLog(MeaningLog logEntity, List<LogImage> images) {
+        log.info("AI analyzeLog start: logDate={}, images={}",
+                logEntity.getLogDate(), images == null ? 0 : images.size());
+        LogAiResult result = openAiClient.analyzeLog(
+                logEntity.getLogDate().toString(),
+                logEntity.getTitle(),
+                logEntity.getMood(),
+                logEntity.getContent(),
                 toImageInputs(images)
         );
+        log.info("AI analyzeLog done: logDate={}, aiTitleLen={}",
+                logEntity.getLogDate(),
+                result != null && result.title() != null ? result.title().length() : 0);
+        return result;
     }
 
     public void streamAnalyzeLog(
