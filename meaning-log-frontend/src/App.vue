@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ChatDotRound, DataAnalysis, DocumentAdd, House, UserFilled } from '@element-plus/icons-vue'
+import { onMounted, watch } from 'vue'
+import { Bell, ChatDotRound, Connection, DataAnalysis, DocumentAdd, House, UserFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
+import { useNotificationStore } from './stores/notificationStore'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const notificationStore = useNotificationStore()
 
 const logout = () => {
   authStore.logout()
+  notificationStore.stopPolling()
+  notificationStore.clearUnread()
   router.push({ name: 'login' })
 }
 
@@ -16,6 +21,28 @@ const handleAccountCommand = (command: string) => {
     logout()
   }
 }
+
+const goNotifications = () => {
+  router.push({ name: 'community' })
+}
+
+onMounted(() => {
+  if (authStore.isLoggedIn) {
+    notificationStore.startPolling()
+  }
+})
+
+watch(
+  () => authStore.isLoggedIn,
+  (loggedIn) => {
+    if (loggedIn) {
+      notificationStore.startPolling()
+    } else {
+      notificationStore.stopPolling()
+      notificationStore.clearUnread()
+    }
+  },
+)
 </script>
 
 <template>
@@ -32,11 +59,27 @@ const handleAccountCommand = (command: string) => {
       <nav v-if="authStore.isLoggedIn" class="header-nav">
         <RouterLink to="/">日志列表</RouterLink>
         <RouterLink to="/logs/new">新增日志</RouterLink>
+        <RouterLink to="/community">社区</RouterLink>
         <RouterLink to="/ai-reports">AI 报告</RouterLink>
         <RouterLink to="/xiaoji">小记</RouterLink>
       </nav>
 
       <div v-if="authStore.isLoggedIn" class="header-account desktop-account">
+        <el-badge
+          :value="notificationStore.unreadCount"
+          :hidden="!notificationStore.hasUnread"
+          :max="99"
+          class="header-bell"
+        >
+          <el-button
+            circle
+            plain
+            size="small"
+            :icon="Bell"
+            title="通知"
+            @click="goNotifications"
+          />
+        </el-badge>
         <span>{{ authStore.user?.username }}</span>
         <el-button size="small" plain @click="logout">退出</el-button>
       </div>
@@ -47,12 +90,18 @@ const handleAccountCommand = (command: string) => {
         trigger="click"
         @command="handleAccountCommand"
       >
-        <el-button
-          class="mobile-account-trigger"
-          circle
-          :icon="UserFilled"
-          title="账户菜单"
-        />
+        <el-badge
+          :value="notificationStore.unreadCount"
+          :hidden="!notificationStore.hasUnread"
+          :max="99"
+        >
+          <el-button
+            class="mobile-account-trigger"
+            circle
+            :icon="UserFilled"
+            title="账户菜单"
+          />
+        </el-badge>
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item disabled>{{ authStore.user?.username }}</el-dropdown-item>
@@ -71,7 +120,7 @@ const handleAccountCommand = (command: string) => {
       <RouterView />
     </el-main>
 
-    <nav v-if="authStore.isLoggedIn" class="mobile-tab-bar">
+    <nav v-if="authStore.isLoggedIn" class="mobile-tab-bar mobile-tab-bar--five">
       <RouterLink to="/" :class="{ active: $route.path === '/' }">
         <el-icon><House /></el-icon>
         <span>日志</span>
@@ -79,6 +128,17 @@ const handleAccountCommand = (command: string) => {
       <RouterLink class="mobile-create-tab" to="/logs/new">
         <el-icon><DocumentAdd /></el-icon>
         <span>新增</span>
+      </RouterLink>
+      <RouterLink to="/community">
+        <el-badge
+          :value="notificationStore.unreadCount"
+          :hidden="!notificationStore.hasUnread"
+          :max="99"
+          is-dot
+        >
+          <el-icon><Connection /></el-icon>
+        </el-badge>
+        <span>社区</span>
       </RouterLink>
       <RouterLink to="/ai-reports">
         <el-icon><DataAnalysis /></el-icon>

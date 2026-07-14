@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ArrowLeft, ArrowRight, ChatDotRound, Check, Delete, Edit, MagicStick, Promotion, RefreshLeft, Star } from '@element-plus/icons-vue'
+import { ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowLeft, ArrowRight, ChatDotRound, Check, Delete, Edit, MagicStick, Position, Promotion, RefreshLeft, Star } from '@element-plus/icons-vue'
 import { useLogDetail } from '../composables/useLogDetail'
+import { publishLog } from '../api/community'
 
 const props = defineProps<{ id: number }>()
 const {
@@ -9,6 +12,28 @@ const {
   log, navigation, openChat, organizeMessyLog, previewImage, previewSuggestion, previewTagList,
   renderedLogContent, router, sendChatMessage, setChatBody, streamingText, tagList, toggleFavorite, undoAiApply,
 } = useLogDetail(props)
+
+const publishing = ref(false)
+
+const handlePublish = async () => {
+  try {
+    await ElMessageBox.confirm('确定要把这条日志发布到社区吗？', '发布到社区', {
+      confirmButtonText: '发布',
+      cancelButtonText: '再想想',
+      type: 'info',
+    })
+  } catch {
+    return
+  }
+  publishing.value = true
+  try {
+    const { data } = await publishLog(props.id)
+    ElMessage.success('已发布到社区')
+    router.push({ name: 'community-post', params: { id: data.publicLogId } })
+  } finally {
+    publishing.value = false
+  }
+}
 </script>
 
 <template>
@@ -22,6 +47,7 @@ const {
           <el-button plain :icon="ArrowRight" :disabled="!navigation?.next" @click="goLog(navigation?.next?.id)">下一条</el-button>
           <el-button type="success" :icon="MagicStick" :loading="aiLoading" @click="handleGenerateAi">AI 生成</el-button>
           <el-button :type="log.favorite ? 'warning' : 'default'" :icon="Star" @click="toggleFavorite">{{ log.favorite ? '已收藏' : '收藏' }}</el-button>
+          <el-button type="success" plain :icon="Position" :loading="publishing" @click="handlePublish">发布到社区</el-button>
           <el-button type="primary" plain :icon="ChatDotRound" @click="openChat">小记</el-button>
           <el-button type="primary" :icon="Edit" @click="goEdit">编辑</el-button>
           <el-button type="danger" plain :icon="Delete" @click="handleDelete">删除</el-button>
