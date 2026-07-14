@@ -13,7 +13,7 @@ import {
   type LogNavigation,
   type MeaningLog,
 } from '../api/logs'
-import { runLogAnalyzeTask, runLogRefineTask } from '../api/aiTask'
+import { runLogAnalyzeTask, runLogRefineTask, AiTaskFailedError } from '../api/aiTask'
 import { renderMarkdown } from '../utils/markdown'
 
 const defaultChatMessages: AiChatMessage[] = [{
@@ -79,9 +79,13 @@ export function useLogDetail(props: { id: number }) {
       const { data } = await applyLogAi(props.id, suggestion)
       log.value = data
       ElMessage.success('小记已经整理好啦')
-    } catch {
+    } catch (error) {
       streamingText.value = ''
-      ElMessage.error('AI 服务暂时不可用，日志仍可正常记录')
+      if (error instanceof AiTaskFailedError && !error.aiUnavailable) {
+        ElMessage.error(error.errorMessage || '小记整理失败，请稍后再试')
+      } else {
+        ElMessage.error('AI 服务暂时不可用，日志仍可正常记录')
+      }
     } finally {
       aiLoading.value = false
     }

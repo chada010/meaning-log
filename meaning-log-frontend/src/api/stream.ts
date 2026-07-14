@@ -1,4 +1,6 @@
 import { AUTH_TOKEN_KEY } from '../constants/app'
+import { useAuthStore } from '../stores/authStore'
+import router from '../router'
 
 const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
 
@@ -192,6 +194,10 @@ export async function subscribeSseDoneEvent(
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      useAuthStore().logout()
+      void router.push('/login')
+    }
     throw new StreamFetchError('http', `Task stream failed: ${response.status}`)
   }
   if (!response.body) {

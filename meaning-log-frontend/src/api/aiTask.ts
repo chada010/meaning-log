@@ -22,8 +22,12 @@ export interface AiTaskResponse {
   updatedAt?: string
 }
 
-const POLL_INTERVAL_MS = 3_000
+const POLL_INITIAL_INTERVAL_MS = 3_000
+const POLL_MAX_INTERVAL_MS = 30_000
+const POLL_BACKOFF_MULTIPLIER = 2
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000
+
+const AI_UNAVAILABLE_PREFIX = 'AI_UNAVAILABLE:'
 
 export const createLogAnalyzeTask = (logId: number) =>
   http.post<AiTaskCreatedResponse>(`/logs/${logId}/ai`)
@@ -53,10 +57,12 @@ const isTerminal = (status: AiTaskStatus) => status === 'SUCCESS' || status === 
 class AiTaskFailedError extends Error {
   readonly taskId: number
   readonly errorMessage?: string
+  readonly aiUnavailable: boolean
   constructor(taskId: number, errorMessage?: string) {
     super(errorMessage || 'AI task failed')
     this.taskId = taskId
     this.errorMessage = errorMessage
+    this.aiUnavailable = errorMessage?.startsWith(AI_UNAVAILABLE_PREFIX) ?? false
     this.name = 'AiTaskFailedError'
   }
 }
@@ -69,6 +75,7 @@ async function waitForTaskDone(taskId: number): Promise<AiTaskResponse> {
     const started = Date.now()
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
+    let nextInterval = POLL_INITIAL_INTERVAL_MS
 
     const tick = async () => {
       if (cancelled) return
@@ -84,7 +91,9 @@ async function waitForTaskDone(taskId: number): Promise<AiTaskResponse> {
           reject(new Error('AI task timed out'))
           return
         }
-        timer = setTimeout(tick, POLL_INTERVAL_MS)
+        const delay = nextInterval
+        nextInterval = Math.min(nextInterval * POLL_BACKOFF_MULTIPLIER, POLL_MAX_INTERVAL_MS)
+        timer = setTimeout(tick, delay)
       } catch (error) {
         cancelled = true
         reject(error)
@@ -96,7 +105,7 @@ async function waitForTaskDone(taskId: number): Promise<AiTaskResponse> {
       if (timer) clearTimeout(timer)
     }
 
-    timer = setTimeout(tick, POLL_INTERVAL_MS)
+    timer = setTimeout(tick, nextInterval)
   })
 
   const ssePromise = new Promise<AiTaskResponse>((resolve, reject) => {
