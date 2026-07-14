@@ -17,7 +17,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
@@ -89,11 +88,12 @@ public class CommunityPublishService {
     }
 
     private void pushToFollowers(PublicLog publicLog, UserAccount user) {
+        // TODO: 粉丝数超过 MAX_FOLLOWERS_PUSH 时会截断, 大 V 场景需拆成分批 fan-out(异步任务队列)
         List<UserFollow> followers = userFollowRepository.findFollowersOf(user.getId(), MAX_FOLLOWERS_PUSH);
         if (followers.isEmpty()) {
             return;
         }
-        long ts = publicLog.getPublishedAt().toEpochSecond(ZoneOffset.UTC);
+        long ts = publicLog.getPublishedAt().atZone(ZoneId.systemDefault()).toEpochSecond();
         List<Long> followerIds = followers.stream().map(UserFollow::getFollowerId).toList();
         redis.pushToFollowerFeeds(followerIds, publicLog.getId(), ts);
     }

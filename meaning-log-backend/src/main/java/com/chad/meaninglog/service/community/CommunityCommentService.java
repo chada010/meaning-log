@@ -51,10 +51,18 @@ public class CommunityCommentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "评论包含敏感词, 请修改后再试");
         }
 
+        Long parentId = request.getParentId();
+        if (parentId != null) {
+            PostComment parent = postCommentRepository.selectById(parentId);
+            if (parent == null || !publicLogId.equals(parent.getPublicLogId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "父评论不存在或不属于当前帖子");
+            }
+        }
+
         PostComment comment = new PostComment();
         comment.setPublicLogId(publicLogId);
         comment.setUserId(user.getId());
-        comment.setParentId(request.getParentId());
+        comment.setParentId(parentId);
         comment.setContent(content);
         postCommentRepository.insert(comment);
 
