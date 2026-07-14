@@ -3,9 +3,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
   applyLogAi,
-  chatWithLogAiStream,
   deleteLog,
-  generateLogAiStream,
   getLogAiChat,
   getLogDetail,
   getLogNavigation,
@@ -15,6 +13,7 @@ import {
   type LogNavigation,
   type MeaningLog,
 } from '../api/logs'
+import { runLogAnalyzeTask, runLogRefineTask } from '../api/aiTask'
 import { renderMarkdown } from '../utils/markdown'
 
 const defaultChatMessages: AiChatMessage[] = [{
@@ -72,10 +71,10 @@ export function useLogDetail(props: { id: number }) {
 
   const handleGenerateAi = async () => {
     aiLoading.value = true
-    streamingText.value = ''
+    streamingText.value = '小记正在整理…'
     try {
       lastAiSnapshot.value = currentAiSnapshot()
-      const suggestion = await generateLogAiStream(props.id, (chunk) => { streamingText.value += chunk })
+      const suggestion = await runLogAnalyzeTask(props.id)
       streamingText.value = ''
       const { data } = await applyLogAi(props.id, suggestion)
       log.value = data
@@ -104,7 +103,8 @@ export function useLogDetail(props: { id: number }) {
     chatLoading.value = true
     await scrollChatToBottom()
     try {
-      previewSuggestion.value = await chatWithLogAiStream(props.id, message)
+      const response = await runLogRefineTask(props.id, message)
+      previewSuggestion.value = response.suggestion
       const { data } = await getLogAiChat(props.id)
       chatMessages.value = data.messages.length ? data.messages : chatMessages.value
       ElMessage.success(successMessage)

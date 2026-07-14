@@ -3,14 +3,12 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Compass, MagicStick, TrendCharts } from '@element-plus/icons-vue'
 import {
   applyAiReport,
-  chatWithAiReportStream,
-  generateAiReportStream,
-  generateDailySummaryStream,
   getAiReportChat,
   getAiReports,
   type AiChatMessage,
   type AiReport,
 } from '../api/logs'
+import { runDailySummaryTask, runPeriodReportTask, runReportRefineTask } from '../api/aiTask'
 
 type ReportMode = 'weekly' | 'mood' | 'themes' | 'daily' | 'monthly' | 'custom'
 interface ReportForm { mode: ReportMode; date: string; range: string[] }
@@ -84,8 +82,8 @@ export function useAiReport() {
     loading.value = true
     try {
       report.value = form.mode === 'daily'
-        ? await generateDailySummaryStream(form.date)
-        : await generateAiReportStream(form.range[0], form.range[1], title.value)
+        ? await runDailySummaryTask(form.date)
+        : await runPeriodReportTask(form.range[0], form.range[1], title.value)
       previewReport.value = undefined
       lastReportSnapshot.value = undefined
       await loadReports()
@@ -124,7 +122,8 @@ export function useAiReport() {
     chatLoading.value = true
     await scrollChatToBottom()
     try {
-      previewReport.value = await chatWithAiReportStream(report.value.id, message)
+      const response = await runReportRefineTask(report.value.id, message)
+      previewReport.value = response.reportSuggestion
       const { data } = await getAiReportChat(report.value.id)
       chatMessages.value = data.messages.length ? data.messages : chatMessages.value
       ElMessage.success('小记生成了一版报告预览')

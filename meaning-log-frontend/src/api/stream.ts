@@ -166,3 +166,50 @@ export async function streamFetch(
     return false
   })
 }
+
+/**
+ * 订阅任务级 SSE：GET 请求打开长连接，遇到 done 事件 resolve。
+ * 返回 { cancel, done }：cancel 用于中止，done 是等待 done 事件的 Promise。
+ */
+export async function subscribeSseDoneEvent(
+  path: string,
+): Promise<{ cancel: () => void; done: Promise<void> }> {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY)
+  const controller = new AbortController()
+
+  let response: Response
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    throw new StreamFetchError('connection', 'Unable to open task stream', { cause: error })
+  }
+
+  if (!response.ok) {
+    throw new StreamFetchError('http', `Task stream failed: ${response.status}`)
+  }
+  if (!response.body) {
+    throw new StreamFetchError('read', 'Task stream has no body')
+  }
+
+  const reader = response.body.getReader()
+  const done = readSse(reader, (event) => event === 'done').finally(() => {
+    try {
+      reader.cancel()
+    } catch {
+      // ignore
+    }
+  })
+  return {
+    cancel: () => {
+      controller.abort()
+    },
+    done,
+  }
+}

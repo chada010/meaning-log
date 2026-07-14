@@ -1,5 +1,4 @@
 import http from './http'
-import { streamFetchJson } from './stream'
 
 export interface MeaningLog {
   id: number
@@ -126,35 +125,12 @@ export const deleteLog = (id: number) => {
   return http.delete<void>(`/logs/${id}`)
 }
 
-export const generateLogAi = (id: number) => {
-  return http.post<MeaningLog>(`/logs/${id}/ai`)
-}
-
-export const generateLogAiStream = (id: number, onChunk?: (chunk: string) => void) =>
-  streamFetchJson<AiSuggestion>(`/logs/${id}/ai/stream`, {}, onChunk)
-
-export const chatWithLogAi = (id: number, message: string) => {
-  return http.post<AiChatResponse>(`/logs/${id}/ai/chat`, { message })
-}
-
 export const getLogAiChat = (id: number) => {
   return http.get<AiChatResponse>(`/logs/${id}/ai/chat`)
 }
 
 export const applyLogAi = (id: number, data: AiSuggestion) => {
   return http.post<MeaningLog>(`/logs/${id}/ai/apply`, data)
-}
-
-export const generateDailySummary = (date: string) => {
-  return http.post<AiReport>('/logs/ai/daily-summary', undefined, {
-    params: { date },
-  })
-}
-
-export const generateAiReport = (startDate: string, endDate: string, title: string) => {
-  return http.post<AiReport>('/logs/ai/report', undefined, {
-    params: { startDate, endDate, title },
-  })
 }
 
 export const getAiReports = () => {
@@ -173,26 +149,6 @@ export const getAiReportChat = (id: number) => {
   return http.get<AiChatResponse>(`/logs/ai/reports/${id}/chat`)
 }
 
-export const chatWithAiReport = (id: number, message: string) => {
-  return http.post<AiChatResponse>(`/logs/ai/reports/${id}/chat`, { message })
-}
-
-export const chatWithLogAiStream = (id: number, message: string, onChunk?: (chunk: string) => void) =>
-  streamFetchJson<AiSuggestion>(`/logs/${id}/ai/chat/stream`, { message }, onChunk)
-
-export const chatWithAiReportStream = (id: number, message: string, onChunk?: (chunk: string) => void) =>
-  streamFetchJson<AiReport>(`/logs/ai/reports/${id}/chat/stream`, { message }, onChunk)
-
-export const generateAiReportStream = (
-  startDate: string,
-  endDate: string,
-  title: string,
-  onChunk?: (chunk: string) => void,
-) => streamFetchJson<AiReport>('/logs/ai/report/stream', { startDate, endDate, title }, onChunk)
-
-export const generateDailySummaryStream = (date: string, onChunk?: (chunk: string) => void) =>
-  streamFetchJson<AiReport>('/logs/ai/daily-summary/stream', { date }, onChunk)
-
 export const getXiaojiSessions = () => {
   return http.get<AiChatSession[]>('/xiaoji/sessions')
 }
@@ -201,6 +157,3 @@ export const getXiaojiMessages = (sessionId: number) => {
   return http.get<AiChatMessage[]>(`/xiaoji/sessions/${sessionId}/messages`)
 }
 
-export const chatWithXiaoji = (message: string, sessionId?: number) => {
-  return http.post<AiChatResponse>('/xiaoji/chat', { message, sessionId })
-}
