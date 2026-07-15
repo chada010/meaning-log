@@ -9,6 +9,8 @@ import {
   type AiReport,
 } from '../api/logs'
 import { runDailySummaryTask, runPeriodReportTask, runReportRefineTask } from '../api/aiTask'
+import { AI_CHAT_MESSAGE_MAX_LENGTH } from '../constants/app'
+import { formatLocalDate, getRecentLocalDateRange } from '../utils/localDate'
 
 export type ReportMode = 'weekly' | 'mood' | 'themes' | 'daily' | 'monthly' | 'custom'
 interface ReportForm { mode: ReportMode; date: string; range: string[] }
@@ -35,7 +37,7 @@ export function useAiReport() {
   const report = ref<AiReport>()
   const previewReport = ref<AiReport>()
   const lastReportSnapshot = ref<AiReport>()
-  const form = reactive<ReportForm>({ mode: 'weekly', date: new Date().toISOString().slice(0, 10), range: [] })
+  const form = reactive<ReportForm>({ mode: 'weekly', date: formatLocalDate(new Date()), range: [] })
   const rules: FormRules<ReportForm> = {
     date: [{ required: true, message: '请选择日期', trigger: 'change' }],
     range: [{ required: true, message: '请选择日期范围', trigger: 'change' }],
@@ -53,10 +55,7 @@ export function useAiReport() {
     { mode: 'themes' as ReportMode, icon: Compass, title: '我反复在意什么', description: '从多篇日志里找出反复出现的牵挂、消耗和期待。', days: 30 },
   ]
   const setRecentRange = (days: number) => {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(end.getDate() - days + 1)
-    form.range = [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)]
+    form.range = getRecentLocalDateRange(days)
   }
   const selectCompanionCard = (mode: ReportMode, days: number) => { form.mode = mode; setRecentRange(days) }
   const handleModeChange = () => {
@@ -120,6 +119,10 @@ export function useAiReport() {
   const sendChatMessage = async () => {
     const message = chatInput.value.trim()
     if (!message || !report.value?.id) return
+    if (message.length > AI_CHAT_MESSAGE_MAX_LENGTH) {
+      ElMessage.warning(`对话内容不能超过 ${AI_CHAT_MESSAGE_MAX_LENGTH} 个字符`)
+      return
+    }
     chatMessages.value.push({ id: Date.now(), role: 'user', content: message, createdAt: '' })
     chatInput.value = ''
     chatLoading.value = true

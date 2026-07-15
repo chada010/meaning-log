@@ -14,6 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -25,6 +28,7 @@ public class AiTaskExecutor {
     private final UserAccountRepository userAccountRepository;
     private final ObjectMapper objectMapper;
     private final AiTaskNotifier aiTaskNotifier;
+    private final Clock businessClock;
 
     @FunctionalInterface
     public interface Work<I> {
@@ -38,18 +42,15 @@ public class AiTaskExecutor {
             log.warn("AI task {} not found, dropping message", taskId);
             return;
         }
-        if (task.getStatus() != null && task.getStatus().isTerminal()) {
-            log.debug("AI task {} already terminal ({}), ignoring", taskId, task.getStatus());
+        if (task.getStatus() != AiTaskStatus.PENDING) {
+            log.debug("AI task {} is {}, ignoring duplicate message", taskId, task.getStatus());
             return;
         }
 
-        if (task.getStatus() == AiTaskStatus.PENDING) {
-            int rows = aiTaskRepository.transitionToRunning(taskId);
-            if (rows == 0) {
-                log.debug("AI task {} was claimed by another consumer", taskId);
-                return;
-            }
-            task.setStatus(AiTaskStatus.RUNNING);
+        int rows = aiTaskRepository.transitionToRunning(taskId, LocalDateTime.now(businessClock));
+        if (rows == 0) {
+            log.debug("AI task {} was claimed by another consumer", taskId);
+            return;
         }
 
         try {
@@ -58,49 +59,52 @@ public class AiTaskExecutor {
                     : userAccountRepository.selectById(task.getUserId());
             I input = objectMapper.readValue(task.getInputJson(), inputType);
             Object result = work.apply(user, input);
-            task.setResultJson(objectMapper.writeValueAsString(result));
-            task.setStatus(AiTaskStatus.SUCCESS);
-            task.setErrorMessage(null);
-            aiTaskRepository.updateById(task);
-            aiTaskNotifier.publishDone(taskId);
-            log.info("AI task {} completed successfully", taskId);
+            String resultJson = objectMapper.writeValueAsString(result);
+            int completed = aiTaskRepository.completeRunning(
+                    taskId, resultJson, LocalDateTime.now(businessClock));
+            if (completed > 0) {
+                aiTaskNotifier.publishDone(taskId);
+                log.info("AI task {} completed successfully", taskId);
+            } else {
+                log.warn("AI task {} finished work after execution ownership was lost", taskId);
+            }
         } catch (AiUnavailableException ex) {
-            markFailed(task, "AI_UNAVAILABLE: " + ex.getMessage());
+            markFailed(taskId, "AI_UNAVAILABLE: " + ex.getMessage());
         } catch (ResponseStatusException ex) {
             if (ex.getStatusCode().is4xxClientError()) {
-                markFailed(task, ex.getReason() == null ? ex.getMessage() : ex.getReason());
+                markFailed(taskId, ex.getReason() == null ? ex.getMessage() : ex.getReason());
             } else {
-                recordAttemptError(task, ex);
+                returnToPending(taskId, ex);
                 throw ex;
             }
         } catch (RuntimeException ex) {
-            recordAttemptError(task, ex);
+            returnToPending(taskId, ex);
             throw ex;
         } catch (Exception ex) {
-            recordAttemptError(task, ex);
+            returnToPending(taskId, ex);
             throw new RuntimeException(ex);
         }
     }
 
-    private void markFailed(AiTask task, String errorMessage) {
-        task.setStatus(AiTaskStatus.FAILED);
-        task.setErrorMessage(truncate(errorMessage));
-        task.setRetryCount(nvl(task.getRetryCount()) + 1);
-        aiTaskRepository.updateById(task);
-        aiTaskNotifier.publishDone(task.getId());
-        log.warn("AI task {} marked FAILED: {}", task.getId(), errorMessage);
+    private void markFailed(Long taskId, String errorMessage) {
+        int rows = aiTaskRepository.failRunning(
+                taskId, truncate(errorMessage), LocalDateTime.now(businessClock));
+        if (rows > 0) {
+            aiTaskNotifier.publishDone(taskId);
+            log.warn("AI task {} marked FAILED: {}", taskId, errorMessage);
+        } else {
+            log.debug("AI task {} failure ignored because execution ownership was lost", taskId);
+        }
     }
 
-    private void recordAttemptError(AiTask task, Exception ex) {
-        task.setErrorMessage(truncate(ex.getMessage()));
-        task.setRetryCount(nvl(task.getRetryCount()) + 1);
-        aiTaskRepository.updateById(task);
-        log.warn("AI task {} attempt failed (retryCount={}): {}",
-                task.getId(), task.getRetryCount(), ex.getMessage());
-    }
-
-    private static int nvl(Integer value) {
-        return value == null ? 0 : value;
+    private void returnToPending(Long taskId, Exception ex) {
+        int rows = aiTaskRepository.returnRunningToPending(
+                taskId, truncate(ex.getMessage()), LocalDateTime.now(businessClock));
+        if (rows > 0) {
+            log.warn("AI task {} attempt failed and returned to PENDING: {}", taskId, ex.getMessage());
+        } else {
+            log.warn("AI task {} retry state was not restored because execution ownership was lost", taskId);
+        }
     }
 
     private static String truncate(String value) {

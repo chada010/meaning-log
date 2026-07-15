@@ -1,4 +1,4 @@
-import { AUTH_TOKEN_KEY } from '../constants/app'
+import { AUTH_TOKEN_KEY, LOGIN_REDIRECT_QUERY_KEY } from '../constants/app'
 import { useAuthStore } from '../stores/authStore'
 
 const BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
@@ -7,16 +7,23 @@ type StreamFetchErrorCode = 'connection' | 'http' | 'read' | 'incomplete'
 
 export class StreamFetchError extends Error {
   readonly code: StreamFetchErrorCode
+  readonly status?: number
 
   constructor(
     code: StreamFetchErrorCode,
     message: string,
-    options?: ErrorOptions,
+    options?: ErrorOptions & { status?: number },
   ) {
     super(message, options)
     this.code = code
+    this.status = options?.status
     this.name = 'StreamFetchError'
   }
+}
+
+export interface SseMessage {
+  event: string
+  data: string
 }
 
 function stripMarkdownFence(text: string): string {
@@ -118,6 +125,64 @@ async function readSse(
   throw new StreamFetchError('incomplete', 'SSE stream ended before done event')
 }
 
+async function handleStreamUnauthorized(): Promise<void> {
+  useAuthStore().logout()
+  const { default: router } = await import('../router')
+  if (router.currentRoute.value.name === 'login') return
+
+  const redirect = router.currentRoute.value.fullPath
+  await router.replace({
+    name: 'login',
+    query: redirect ? { [LOGIN_REDIRECT_QUERY_KEY]: redirect } : undefined,
+  })
+}
+
+async function requestEventStream(
+  path: string,
+  signal?: AbortSignal,
+): Promise<ReadableStreamDefaultReader<Uint8Array>> {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY)
+  let response: Response
+
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal,
+    })
+  } catch (error) {
+    throw new StreamFetchError('connection', 'Unable to open event stream', { cause: error })
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) await handleStreamUnauthorized()
+    throw new StreamFetchError('http', `Event stream failed: ${response.status}`, { status: response.status })
+  }
+  if (!response.body) {
+    throw new StreamFetchError('read', 'Event stream has no body')
+  }
+  return response.body.getReader()
+}
+
+export async function subscribeSseEvents(
+  path: string,
+  onEvent: (message: SseMessage) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const reader = await requestEventStream(path, signal)
+  try {
+    await readSse(reader, (event, data) => {
+      onEvent({ event: event || 'message', data })
+      return false
+    })
+  } finally {
+    void reader.cancel().catch(() => undefined)
+  }
+}
+
 /**
  * 流式请求，累计所有 chunk，收到 done 事件后解析并返回结果。
  * 适用于 refine 类接口，AI 输出是 JSON，需要完整接收后才能解析。
@@ -175,42 +240,10 @@ export async function streamFetch(
 export async function subscribeSseDoneEvent(
   path: string,
 ): Promise<{ cancel: () => void; done: Promise<void> }> {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY)
   const controller = new AbortController()
-
-  let response: Response
-  try {
-    response = await fetch(`${BASE_URL}${path}`, {
-      method: 'GET',
-      headers: {
-        Accept: 'text/event-stream',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      signal: controller.signal,
-    })
-  } catch (error) {
-    throw new StreamFetchError('connection', 'Unable to open task stream', { cause: error })
-  }
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      useAuthStore().logout()
-      const { default: router } = await import('../router')
-      void router.push('/login')
-    }
-    throw new StreamFetchError('http', `Task stream failed: ${response.status}`)
-  }
-  if (!response.body) {
-    throw new StreamFetchError('read', 'Task stream has no body')
-  }
-
-  const reader = response.body.getReader()
+  const reader = await requestEventStream(path, controller.signal)
   const done = readSse(reader, (event) => event === 'done').finally(() => {
-    try {
-      reader.cancel()
-    } catch {
-      // ignore
-    }
+    void reader.cancel().catch(() => undefined)
   })
   return {
     cancel: () => {

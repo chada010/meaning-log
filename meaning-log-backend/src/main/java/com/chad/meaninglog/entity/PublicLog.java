@@ -35,6 +35,8 @@ public class PublicLog {
 
     private long commentCount = 0L;
 
+    private long cacheVersion = 0L;
+
     private String status = Status.VISIBLE.name();
 
     @TableField(fill = FieldFill.INSERT)

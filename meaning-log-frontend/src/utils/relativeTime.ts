@@ -3,6 +3,8 @@
  * 超过 7 天返回 YYYY-MM-DD。
  * 输入非法或为空时返回空串。
  */
+import { formatLocalDate } from './localDate'
+
 export const formatRelativeTime = (iso: string | null | undefined): string => {
   if (!iso) return ''
   const value = new Date(iso)
@@ -13,5 +15,5 @@ export const formatRelativeTime = (iso: string | null | undefined): string => {
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`
   if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`
   if (diffSec < 604800) return `${Math.floor(diffSec / 86400)} 天前`
-  return value.toISOString().slice(0, 10)
+  return formatLocalDate(value)
 }

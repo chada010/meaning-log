@@ -6,6 +6,7 @@ import com.chad.meaninglog.dto.MeaningLogResponse;
 import com.chad.meaninglog.entity.MeaningLog;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.repository.MeaningLogRepository;
+import com.chad.meaninglog.service.community.CommunityPostLifecycleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ public class MeaningLogLifecycleService {
     private final MeaningLogSupportService meaningLogSupportService;
     private final MeaningLogImageService meaningLogImageService;
     private final XiaojiChatService xiaojiChatService;
+    private final CommunityPostLifecycleService communityPostLifecycleService;
 
     @Transactional(readOnly = true)
     public List<MeaningLogResponse> findAll(UserAccount user, LocalDate logDate, String keyword, String tag, Boolean favorite) {
@@ -89,6 +91,7 @@ public class MeaningLogLifecycleService {
     @Transactional
     public void delete(UserAccount user, Long id) {
         MeaningLog meaningLog = meaningLogSupportService.getMeaningLogForUpdate(user, id);
+        communityPostLifecycleService.deleteForMeaningLog(meaningLog.getId());
         meaningLogImageService.deleteImages(meaningLog);
         xiaojiChatService.deleteLogChats(meaningLog);
         meaningLogRepository.delete(meaningLog);

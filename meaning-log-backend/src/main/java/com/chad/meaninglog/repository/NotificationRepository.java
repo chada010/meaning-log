@@ -41,4 +41,15 @@ public interface NotificationRepository extends BaseMapper<Notification> {
                 .eq(Notification::getReceiverId, receiverId)
                 .eq(Notification::isReadFlag, false));
     }
+
+    default long countByPublicLogIdAndType(Long publicLogId, Notification.Type type) {
+        return selectCount(new LambdaQueryWrapper<Notification>()
+                .eq(Notification::getPublicLogId, publicLogId)
+                .eq(Notification::getType, type.name()));
+    }
+
+    default int deleteByPublicLogId(Long publicLogId) {
+        return delete(new LambdaQueryWrapper<Notification>()
+                .eq(Notification::getPublicLogId, publicLogId));
+    }
 }

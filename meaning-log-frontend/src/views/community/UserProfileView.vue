@@ -11,6 +11,7 @@ import {
   type FeedItem,
   type UserProfile,
 } from '../../api/community'
+import { displayLogTitle } from '../../utils/logDisplay'
 
 const props = defineProps<{ id: number }>()
 
@@ -104,7 +105,7 @@ const previewText = (item: FeedItem) => item.aiSummary ?? item.title ?? ''
         class="community-card community-card--compact"
         @click="openPost(item.publicLogId)"
       >
-        <h3 class="community-card__title">{{ item.aiTitle || item.title || '无标题' }}</h3>
+        <h3 class="community-card__title">{{ displayLogTitle(item) }}</h3>
         <p class="community-card__excerpt">{{ previewText(item) }}</p>
         <div class="community-card__foot">
           <span class="community-card__stat">赞 {{ item.likeCount }}</span>

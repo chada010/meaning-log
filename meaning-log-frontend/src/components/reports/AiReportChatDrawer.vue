@@ -2,6 +2,7 @@
 import { computed, type ComponentPublicInstance } from 'vue'
 import { Check, Promotion, RefreshLeft } from '@element-plus/icons-vue'
 import type { AiChatMessage, AiReport } from '../../api/logs'
+import { AI_CHAT_MESSAGE_MAX_LENGTH } from '../../constants/app'
 
 const props = defineProps<{
   applyLoading: boolean
@@ -44,7 +45,7 @@ const setChatBody = (value: Element | ComponentPublicInstance | null) => {
         <div v-if="previewTagList.length" class="tag-row"><el-tag v-for="tag in previewTagList" :key="tag" effect="light">{{ tag }}</el-tag></div>
       </div>
       <div class="xiaoji-input">
-        <el-input v-model="input" type="textarea" :rows="4" maxlength="400" show-word-limit placeholder="比如：这份周报再短一点，更突出情绪变化和下周可以继续的小事。" @keydown.ctrl.enter.prevent="emit('send')" />
+        <el-input v-model="input" type="textarea" :rows="4" :maxlength="AI_CHAT_MESSAGE_MAX_LENGTH" show-word-limit placeholder="比如：这份周报再短一点，更突出情绪变化和下周可以继续的小事。" @keydown.ctrl.enter.prevent="emit('send')" />
         <el-button type="primary" :icon="Promotion" :loading="chatLoading" @click="emit('send')">发送</el-button>
       </div>
     </div>

@@ -3,13 +3,13 @@ export const AUTH_USER_KEY = 'meaning-log-user'
 
 export const PENDING_TRIAL_STORAGE_KEY = 'meaning-log-pending-trial'
 export const TRIAL_DRAFT_STORAGE_KEY = 'meaning-log-trial-draft'
-export const MEANING_LOG_ITEMS_STORAGE_KEY = 'meaning-log-items'
 
 export const NEW_LOG_DRAFT_STORAGE_KEY = 'meaning-log-draft-new-v2'
 export const LEGACY_NEW_LOG_DRAFT_STORAGE_KEY = 'meaning-log-draft-new'
 export const EDIT_LOG_DRAFT_STORAGE_KEY_PREFIX = 'meaning-log-draft-edit-'
 
 export const API_TIMEOUT_MS = 30_000
+export const AI_CHAT_MESSAGE_MAX_LENGTH = 600
 export const SESSION_EXPIRED_RESET_DELAY_MS = 1_000
 export const LOGIN_REDIRECT_QUERY_KEY = 'redirect'
 

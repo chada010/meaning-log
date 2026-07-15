@@ -2,9 +2,9 @@ package com.chad.meaninglog.service.community;
 
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 
 /**
  * 热榜分数计算: likes*2 + comments*3 + views*0.1 - hoursSincePublished * 0.5
@@ -17,6 +17,12 @@ public class HotScoreCalculator {
     private static final double VIEW_WEIGHT = 0.1;
     private static final double DECAY_PER_HOUR = 0.5;
 
+    private final Clock businessClock;
+
+    public HotScoreCalculator(Clock businessClock) {
+        this.businessClock = businessClock;
+    }
+
     public double score(long likes, long comments, long views, LocalDateTime publishedAt) {
         double base = likes * LIKE_WEIGHT + comments * COMMENT_WEIGHT + views * VIEW_WEIGHT;
         long hours = hoursSince(publishedAt);
@@ -27,7 +33,7 @@ public class HotScoreCalculator {
         if (publishedAt == null) {
             return 0L;
         }
-        Duration duration = Duration.between(publishedAt, LocalDateTime.now(ZoneId.systemDefault()));
+        Duration duration = Duration.between(publishedAt, LocalDateTime.now(businessClock));
         return Math.max(0L, duration.toHours());
     }
 }

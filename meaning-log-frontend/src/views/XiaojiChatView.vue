@@ -9,6 +9,7 @@ import {
   type AiChatSession,
 } from '../api/logs'
 import { runXiaojiChatTask } from '../api/aiTask'
+import { AI_CHAT_MESSAGE_MAX_LENGTH } from '../constants/app'
 
 const sessions = ref<AiChatSession[]>([])
 const messages = ref<AiChatMessage[]>([])
@@ -68,6 +69,10 @@ const startNewChat = () => {
 const sendMessage = async () => {
   const message = chatInput.value.trim()
   if (!message) {
+    return
+  }
+  if (message.length > AI_CHAT_MESSAGE_MAX_LENGTH) {
+    ElMessage.warning(`对话内容不能超过 ${AI_CHAT_MESSAGE_MAX_LENGTH} 个字符`)
     return
   }
 
@@ -155,7 +160,7 @@ onMounted(async () => {
           v-model="chatInput"
           type="textarea"
           :rows="4"
-          maxlength="600"
+          :maxlength="AI_CHAT_MESSAGE_MAX_LENGTH"
           show-word-limit
           placeholder="和小记说说吧。比如：今天有点累，但又不知道为什么。"
           @keydown.ctrl.enter.prevent="sendMessage"
