@@ -3,53 +3,36 @@ package com.chad.meaninglog.service.community;
 import com.chad.meaninglog.entity.MeaningLog;
 import com.chad.meaninglog.entity.PublicLog;
 import com.chad.meaninglog.entity.UserAccount;
-import com.chad.meaninglog.entity.UserFollow;
 import com.chad.meaninglog.repository.MeaningLogRepository;
 import com.chad.meaninglog.repository.PublicLogRepository;
-import com.chad.meaninglog.repository.UserFollowRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Duration;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class CommunityPublishService {
-
-    private static final Duration PUBLISH_LOCK_TTL = Duration.ofSeconds(5);
-    private static final int MAX_FOLLOWERS_PUSH = 5000;
 
     private final PublicLogRepository publicLogRepository;
     private final MeaningLogRepository meaningLogRepository;
-    private final UserFollowRepository userFollowRepository;
-    private final CommunityRedisService redis;
-    private final HotScoreCalculator hotScoreCalculator;
+    private final CommunityRedisRepairService repairService;
+    private final Clock businessClock;
 
     @Transactional
     public PublicLog publish(UserAccount user, Long logId) {
-        MeaningLog log = meaningLogRepository.findByIdAndUser(logId, user)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "日志不存在或无权限"));
-
-        String lockKey = CommunityRedisKeys.publishLock(user.getId());
-        String token = redis.acquireLock(lockKey, PUBLISH_LOCK_TTL);
-        if (token == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "操作过于频繁, 请稍后再试");
-        }
-        try {
-            return publicLogRepository.findByLogId(logId)
-                    .map(existing -> restoreIfHidden(existing, user))
-                    .orElseGet(() -> createNew(log, user));
-        } finally {
-            redis.releaseLock(lockKey, token);
-        }
+        MeaningLog log = meaningLogRepository.findByIdAndUserForUpdate(logId, user)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "日志不存在或无权限"));
+        PublicLog publicLog = publicLogRepository.findByLogIdForUpdate(logId)
+                .map(existing -> restoreIfHidden(existing, user))
+                .orElseGet(() -> createNew(log, user));
+        repairService.enqueuePostPublish(publicLog.getId());
+        return publicLog;
     }
 
     private PublicLog restoreIfHidden(PublicLog existing, UserAccount user) {
@@ -60,53 +43,34 @@ public class CommunityPublishService {
             return existing;
         }
         existing.setStatus(PublicLog.Status.VISIBLE.name());
-        existing.setPublishedAt(LocalDateTime.now(ZoneId.systemDefault()));
-        publicLogRepository.save(existing);
-        afterPublish(existing, user);
-        return existing;
+        existing.setPublishedAt(LocalDateTime.now(businessClock));
+        existing.setCacheVersion(existing.getCacheVersion() + 1);
+        return publicLogRepository.save(existing);
     }
 
     private PublicLog createNew(MeaningLog log, UserAccount user) {
         PublicLog publicLog = new PublicLog();
         publicLog.setLogId(log.getId());
         publicLog.setUserId(user.getId());
-        publicLog.setPublishedAt(LocalDateTime.now(ZoneId.systemDefault()));
+        publicLog.setPublishedAt(LocalDateTime.now(businessClock));
         publicLog.setStatus(PublicLog.Status.VISIBLE.name());
-        publicLogRepository.save(publicLog);
-        afterPublish(publicLog, user);
-        return publicLog;
-    }
-
-    private void afterPublish(PublicLog publicLog, UserAccount user) {
-        redis.seedCounts(publicLog.getId(),
-                publicLog.getLikeCount(),
-                publicLog.getCommentCount(),
-                publicLog.getViewCount());
-        redis.updateHotScore(publicLog.getId(),
-                hotScoreCalculator.score(0, 0, 0, publicLog.getPublishedAt()));
-        pushToFollowers(publicLog, user);
-    }
-
-    private void pushToFollowers(PublicLog publicLog, UserAccount user) {
-        // TODO: 粉丝数超过 MAX_FOLLOWERS_PUSH 时会截断, 大 V 场景需拆成分批 fan-out(异步任务队列)
-        List<UserFollow> followers = userFollowRepository.findFollowersOf(user.getId(), MAX_FOLLOWERS_PUSH);
-        if (followers.isEmpty()) {
-            return;
-        }
-        long ts = publicLog.getPublishedAt().atZone(ZoneId.systemDefault()).toEpochSecond();
-        List<Long> followerIds = followers.stream().map(UserFollow::getFollowerId).toList();
-        redis.pushToFollowerFeeds(followerIds, publicLog.getId(), ts);
+        publicLog.setCacheVersion(1L);
+        return publicLogRepository.save(publicLog);
     }
 
     @Transactional
     public void unpublish(UserAccount user, Long logId) {
-        PublicLog publicLog = publicLogRepository.findByLogId(logId)
+        meaningLogRepository.findByIdAndUserForUpdate(logId, user)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "日志不存在或无权限"));
+        PublicLog publicLog = publicLogRepository.findByLogIdForUpdate(logId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "该日志未发布"));
         if (!publicLog.getUserId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权撤回他人发布");
         }
         publicLog.setStatus(PublicLog.Status.HIDDEN.name());
+        publicLog.setCacheVersion(publicLog.getCacheVersion() + 1);
         publicLogRepository.save(publicLog);
-        redis.removeFromHot(publicLog.getId());
+        repairService.enqueuePostState(publicLog.getId(), null);
     }
 }

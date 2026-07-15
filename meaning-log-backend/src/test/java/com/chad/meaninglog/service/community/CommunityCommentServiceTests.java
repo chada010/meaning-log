@@ -12,11 +12,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,8 +32,7 @@ class CommunityCommentServiceTests {
     private PostCommentRepository postCommentRepository;
     private UserAccountRepository userAccountRepository;
     private SensitiveWordFilter sensitiveWordFilter;
-    private CommunityRedisService redis;
-    private HotScoreCalculator hotScoreCalculator;
+    private CommunityRedisRepairService repairService;
     private NotificationService notificationService;
     private CommunityCommentService service;
 
@@ -42,11 +45,11 @@ class CommunityCommentServiceTests {
         postCommentRepository = mock(PostCommentRepository.class);
         userAccountRepository = mock(UserAccountRepository.class);
         sensitiveWordFilter = mock(SensitiveWordFilter.class);
-        redis = mock(CommunityRedisService.class);
-        hotScoreCalculator = mock(HotScoreCalculator.class);
+        repairService = mock(CommunityRedisRepairService.class);
         notificationService = mock(NotificationService.class);
         service = new CommunityCommentService(publicLogRepository, postCommentRepository,
-                userAccountRepository, sensitiveWordFilter, redis, hotScoreCalculator, notificationService);
+                userAccountRepository, sensitiveWordFilter, repairService, notificationService,
+                Clock.fixed(Instant.parse("2026-07-15T00:00:00Z"), ZoneId.of("Asia/Shanghai")));
 
         user = new UserAccount();
         user.setId(10L);
@@ -56,7 +59,8 @@ class CommunityCommentServiceTests {
         publicLog.setId(100L);
         publicLog.setUserId(20L);
         publicLog.setStatus(PublicLog.Status.VISIBLE.name());
-        when(publicLogRepository.findVisibleById(100L)).thenReturn(Optional.of(publicLog));
+        when(publicLogRepository.findVisibleByIdForUpdate(100L)).thenReturn(Optional.of(publicLog));
+        when(publicLogRepository.incrementCommentCount(anyLong(), any())).thenReturn(1);
         when(sensitiveWordFilter.firstHit(any())).thenReturn(null);
     }
 
@@ -77,7 +81,7 @@ class CommunityCommentServiceTests {
 
         ArgumentCaptor<PostComment> captor = ArgumentCaptor.forClass(PostComment.class);
         verify(postCommentRepository, never()).insert(captor.capture());
-        verify(redis, never()).incrComment(any());
+        verify(repairService, never()).enqueuePostState(any(), any());
         verify(notificationService, never()).notifyComment(any(), any(), any(), any(), any());
     }
 
@@ -103,10 +107,6 @@ class CommunityCommentServiceTests {
         sameParent.setId(500L);
         sameParent.setPublicLogId(100L);
         when(postCommentRepository.selectById(500L)).thenReturn(sameParent);
-        when(redis.incrComment(100L)).thenReturn(1L);
-        when(redis.getCount(any())).thenReturn(0L);
-        when(hotScoreCalculator.score(anyLong(), anyLong(), anyLong(), any())).thenReturn(0.0);
-
         CommentRequest request = new CommentRequest();
         request.setContent("同帖回复");
         request.setParentId(500L);
@@ -115,15 +115,12 @@ class CommunityCommentServiceTests {
 
         ArgumentCaptor<PostComment> captor = ArgumentCaptor.forClass(PostComment.class);
         verify(postCommentRepository).insert(captor.capture());
-        verify(redis).incrComment(100L);
+        verify(publicLogRepository).incrementCommentCount(eq(100L), any());
+        verify(repairService).enqueuePostState(100L, null);
     }
 
     @Test
     void acceptsTopLevelCommentWithoutParent() {
-        when(redis.incrComment(100L)).thenReturn(1L);
-        when(redis.getCount(any())).thenReturn(0L);
-        when(hotScoreCalculator.score(anyLong(), anyLong(), anyLong(), any())).thenReturn(0.0);
-
         CommentRequest request = new CommentRequest();
         request.setContent("一级评论");
 

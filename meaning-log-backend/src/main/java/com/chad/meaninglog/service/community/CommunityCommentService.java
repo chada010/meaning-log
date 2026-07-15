@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collections;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,13 +32,13 @@ public class CommunityCommentService {
     private final PostCommentRepository postCommentRepository;
     private final UserAccountRepository userAccountRepository;
     private final SensitiveWordFilter sensitiveWordFilter;
-    private final CommunityRedisService redis;
-    private final HotScoreCalculator hotScoreCalculator;
+    private final CommunityRedisRepairService repairService;
     private final NotificationService notificationService;
+    private final Clock businessClock;
 
     @Transactional
     public CommentResponse create(UserAccount user, Long publicLogId, CommentRequest request) {
-        PublicLog publicLog = publicLogRepository.findVisibleById(publicLogId)
+        PublicLog publicLog = publicLogRepository.findVisibleByIdForUpdate(publicLogId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "帖子不存在"));
 
         String content = request.getContent() == null ? "" : request.getContent().trim();
@@ -66,13 +68,14 @@ public class CommunityCommentService {
         comment.setContent(content);
         postCommentRepository.insert(comment);
 
-        long comments = redis.incrComment(publicLogId);
-        long likes = redis.getCount(CommunityRedisKeys.countLike(publicLogId));
-        long views = redis.getCount(CommunityRedisKeys.countView(publicLogId));
-        redis.updateHotScore(publicLog.getId(),
-                hotScoreCalculator.score(likes, comments, views, publicLog.getPublishedAt()));
+        int updated = publicLogRepository.incrementCommentCount(
+                publicLogId, LocalDateTime.now(businessClock));
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "帖子不存在或已下架");
+        }
 
         notificationService.notifyComment(user, publicLog.getUserId(), publicLogId, comment.getId(), content);
+        repairService.enqueuePostState(publicLogId, null);
         return CommentResponse.from(comment, user);
     }
 
@@ -87,7 +90,7 @@ public class CommunityCommentService {
         Set<Long> userIds = comments.stream().map(PostComment::getUserId).collect(Collectors.toSet());
         Map<Long, UserAccount> userMap = userIds.isEmpty()
                 ? Collections.emptyMap()
-                : userAccountRepository.selectBatchIds(userIds).stream()
+                : userAccountRepository.selectByIds(userIds).stream()
                 .collect(Collectors.toMap(UserAccount::getId, u -> u));
         return comments.stream()
                 .map(c -> CommentResponse.from(c, userMap.get(c.getUserId())))

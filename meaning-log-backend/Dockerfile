@@ -27,7 +27,13 @@ RUN mvn -B package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-RUN addgroup -S app && adduser -S app -G app
+ENV TZ=Asia/Shanghai
+
+RUN apk add --no-cache tzdata && \
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    addgroup -S app && \
+    adduser -S app -G app
 USER app
 
 COPY --from=build --chown=app:app /build/target/meaning-log-backend-*.jar app.jar
