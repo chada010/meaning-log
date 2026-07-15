@@ -19,6 +19,7 @@ out/
 node_modules/
 dist/
 .vite/
+.vercel/
 *.local
 
 # ===== Environment / Secrets =====
@@ -27,6 +28,7 @@ dist/
 !.env.example
 !.env.prod.example
 !meaning-log-frontend/.env.local.example
+!meaning-log-frontend/.env.production.example
 application-local.properties
 application-docker.properties
 application-prod.properties
