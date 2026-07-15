@@ -8,6 +8,7 @@ import {
   type MeaningLog,
 } from '../api/logs'
 import { runLogRefineTask } from '../api/aiTask'
+import { AI_CHAT_MESSAGE_MAX_LENGTH } from '../constants/app'
 import { displayLogTitle } from '../utils/logDisplay'
 
 const EMPTY_CHAT_MESSAGE: AiChatMessage = {
@@ -110,6 +111,10 @@ export const useHomeAiChat = (logs: Ref<MeaningLog[]>) => {
 
     const message = chatInput.value.trim()
     if (!message) {
+      return
+    }
+    if (message.length > AI_CHAT_MESSAGE_MAX_LENGTH) {
+      ElMessage.warning(`对话内容不能超过 ${AI_CHAT_MESSAGE_MAX_LENGTH} 个字符`)
       return
     }
 

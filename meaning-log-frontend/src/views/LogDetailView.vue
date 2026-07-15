@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, ChatDotRound, Check, Delete, Edit, MagicStick, P
 import { useLogDetail } from '../composables/useLogDetail'
 import { displayLogTitle } from '../utils/logDisplay'
 import { publishLog } from '../api/community'
+import { AI_CHAT_MESSAGE_MAX_LENGTH } from '../constants/app'
 
 const props = defineProps<{ id: number }>()
 const {
@@ -97,7 +98,7 @@ const handlePublish = async () => {
             <div v-if="previewTagList.length" class="tag-row"><el-tag v-for="tag in previewTagList" :key="tag" effect="light">{{ tag }}</el-tag></div>
           </div>
           <div class="xiaoji-input">
-            <el-input v-model="chatInput" type="textarea" :rows="4" maxlength="300" show-word-limit placeholder="比如：写得更具体一点，少一点可爱，多一点复盘感。" @keydown.ctrl.enter.prevent="sendChatMessage" />
+            <el-input v-model="chatInput" type="textarea" :rows="4" :maxlength="AI_CHAT_MESSAGE_MAX_LENGTH" show-word-limit placeholder="比如：写得更具体一点，少一点可爱，多一点复盘感。" @keydown.ctrl.enter.prevent="sendChatMessage" />
             <el-button type="primary" :icon="Promotion" :loading="chatLoading" @click="sendChatMessage">发送</el-button>
           </div>
         </div>

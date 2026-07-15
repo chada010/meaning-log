@@ -5,6 +5,7 @@ import { ElEmpty, ElIcon, ElSkeleton, ElTag } from 'element-plus'
 import { ChatDotRound, Pointer, View } from '@element-plus/icons-vue'
 import { useCommunityFeed } from '../../composables/useCommunityFeed'
 import type { FeedType } from '../../api/community'
+import { displayLogTitle } from '../../utils/logDisplay'
 
 const router = useRouter()
 const feed = useCommunityFeed()
@@ -89,7 +90,7 @@ const publishedLabel = (iso: string | null | undefined) => {
           </a>
           <span class="community-card__time">{{ publishedLabel(item.publishedAt) }}</span>
         </header>
-        <h3 class="community-card__title">{{ item.aiTitle || item.title || '无标题' }}</h3>
+        <h3 class="community-card__title">{{ displayLogTitle(item) }}</h3>
         <p class="community-card__excerpt">{{ previewText(item) }}</p>
         <div v-if="tagList(item.aiTags).length" class="community-card__tags">
           <el-tag

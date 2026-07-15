@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElButton, ElEmpty, ElIcon, ElInput, ElSkeleton, ElTag } from 'element-plus'
 import { ArrowLeft, ChatDotRound, Pointer, UserFilled } from '@element-plus/icons-vue'
 import { useCommunityPost } from '../../composables/useCommunityPost'
+import { displayLogTitle } from '../../utils/logDisplay'
 
 const props = defineProps<{ id: number }>()
 
@@ -59,7 +60,7 @@ const openProfile = (userId: number | undefined | null) => {
       </header>
 
       <h1 class="community-post__title">
-        {{ post.post.value.aiTitle || post.post.value.title || '无标题' }}
+        {{ displayLogTitle(post.post.value) }}
       </h1>
       <div v-if="tagList(post.post.value.aiTags).length" class="community-post__tags">
         <el-tag

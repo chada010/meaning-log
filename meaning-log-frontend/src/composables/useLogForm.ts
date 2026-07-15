@@ -1,13 +1,10 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, type ComponentPublicInstance, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import type { LogImage, MeaningLogRequest } from '../api/logs'
+import type { LogImageRequest, MeaningLogRequest } from '../api/logs'
+import { parseLogDraft, writeLogDraft } from '../utils/logDraft'
+import { formatLocalDate } from '../utils/localDate'
 import { renderMarkdown } from '../utils/markdown'
-
-interface LogDraft {
-  value: MeaningLogRequest
-  savedAt: number
-}
 
 interface LogFormProps {
   initialValue?: MeaningLogRequest
@@ -31,7 +28,7 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
   const form = reactive<MeaningLogRequest>({
     title: '',
     content: '',
-    logDate: new Date().toISOString().slice(0, 10),
+    logDate: formatLocalDate(new Date()),
     mood: '',
     favorite: false,
     images: [],
@@ -39,34 +36,15 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
   const restoredDraft = ref(false)
   const draggedImageIndex = ref<number>()
   const contentMode = ref<'write' | 'preview'>('write')
-  const draftStatus = ref('草稿会自动保存')
+  const draftStatus = ref('草稿会自动保存，图片不会进入草稿')
   const skipDraftOnUnmount = ref(false)
   let draftTimer: ReturnType<typeof window.setTimeout> | undefined
 
-  const isEmptyDraft = (value: MeaningLogRequest) => (
-    !value.title?.trim()
-    && !value.content?.trim()
-    && !value.mood?.trim()
-    && !value.favorite
-    && !value.images?.length
-  )
-
-  const readDraft = (rawDraft: string): MeaningLogRequest | undefined => {
-    const parsed = JSON.parse(rawDraft) as Partial<LogDraft> | MeaningLogRequest
-    return 'value' in parsed && parsed.value && typeof parsed.savedAt === 'number'
-      ? parsed.value
-      : undefined
-  }
-
   const writeDraft = (value: MeaningLogRequest) => {
     if (!props.draftKey || skipDraftOnUnmount.value) {
-      return
+      return 'removed' as const
     }
-    if (isEmptyDraft(value)) {
-      localStorage.removeItem(props.draftKey)
-      return
-    }
-    localStorage.setItem(props.draftKey, JSON.stringify({ value, savedAt: Date.now() } satisfies LogDraft))
+    return writeLogDraft(localStorage, props.draftKey, value)
   }
 
   watch(() => props.initialValue, (value) => {
@@ -90,8 +68,8 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
       return
     }
     try {
-      const draft = readDraft(rawDraft)
-      if (!draft || isEmptyDraft(draft)) {
+      const draft = parseLogDraft(rawDraft)
+      if (!draft || (!draft.title?.trim() && !draft.content?.trim() && !draft.mood?.trim() && !draft.favorite)) {
         localStorage.removeItem(props.draftKey)
         return
       }
@@ -100,10 +78,11 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
       form.logDate = draft.logDate || form.logDate
       form.mood = draft.mood || ''
       form.favorite = draft.favorite ?? form.favorite
-      form.images = draft.images || form.images
       restoredDraft.value = true
-      draftStatus.value = '已接上上次没写完的草稿'
-      ElMessage.info('接上次没写完的地方了')
+      draftStatus.value = draft.imageCount > 0
+        ? '已恢复文本草稿，图片需要重新选择'
+        : '已接上上次没写完的草稿'
+      ElMessage.info(draft.imageCount > 0 ? '已恢复文本草稿，图片不会自动恢复' : '接上次没写完的地方了')
     } catch {
       localStorage.removeItem(props.draftKey)
     }
@@ -118,10 +97,20 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
       window.clearTimeout(draftTimer)
     }
     draftTimer = window.setTimeout(() => {
-      writeDraft(value)
-      draftStatus.value = `草稿已自动保存 ${new Date().toLocaleTimeString('zh-CN', {
-        hour: '2-digit', minute: '2-digit',
-      })}`
+      const result = writeDraft(value)
+      if (result === 'quota-exceeded') {
+        draftStatus.value = '存储空间不足，文本草稿保存失败'
+        return
+      }
+      if (result === 'failed') {
+        draftStatus.value = '草稿保存失败，请保留当前页面'
+        return
+      }
+      draftStatus.value = result === 'saved'
+        ? `文本草稿已自动保存 ${new Date().toLocaleTimeString('zh-CN', {
+            hour: '2-digit', minute: '2-digit',
+          })}`
+        : '草稿会自动保存，图片不会进入草稿'
     }, 450)
   }, { deep: true })
 
@@ -184,7 +173,7 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
       ElMessage.warning('最多上传3张图片')
       return
     }
-    const nextImages: LogImage[] = []
+    const nextImages: LogImageRequest[] = []
     for (const file of files.slice(0, remaining)) {
       if (!file.type.startsWith('image/')) {
         ElMessage.warning(`${file.name} 不是图片文件`)
@@ -230,7 +219,12 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
       logDate: form.logDate,
       mood: form.mood?.trim() || undefined,
       favorite: form.favorite,
-      images: form.images,
+      images: form.images?.map((image) => ({
+        fileName: image.fileName,
+        caption: image.caption,
+        contentType: image.contentType,
+        dataUrl: image.dataUrl,
+      })),
     })
   }
 

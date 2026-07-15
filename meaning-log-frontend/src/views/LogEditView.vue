@@ -21,10 +21,10 @@ const initialValue = computed<MeaningLogRequest | undefined>(() => {
   }
 
   return {
-    title: log.value.title,
+    title: log.value.title ?? undefined,
     content: log.value.content,
     logDate: log.value.logDate,
-    mood: log.value.mood,
+    mood: log.value.mood ?? undefined,
     favorite: log.value.favorite,
     images: log.value.images,
   }

@@ -13,5 +13,6 @@ export const formatRelativeTime = (iso: string | null | undefined): string => {
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`
   if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`
   if (diffSec < 604800) return `${Math.floor(diffSec / 86400)} 天前`
-  return value.toISOString().slice(0, 10)
+  return formatLocalDate(value)
 }
+import { formatLocalDate } from './localDate'

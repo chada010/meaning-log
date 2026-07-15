@@ -2,6 +2,8 @@
 import { Check, Promotion, RefreshLeft } from '@element-plus/icons-vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import type { AiChatMessage, AiSuggestion, MeaningLog } from '../../api/logs'
+import { AI_CHAT_MESSAGE_MAX_LENGTH } from '../../constants/app'
+import { displayLogTitle } from '../../utils/logDisplay'
 
 const props = defineProps<{
   applyLoading: boolean
@@ -75,7 +77,7 @@ watch(
 
       <div class="xiaoji-current">
         <strong>当前日志</strong>
-        <p>{{ selectedLog.title }}｜{{ selectedLog.aiSummary || '还没有总结，可以直接告诉小记你想要什么样的总结。' }}</p>
+        <p>{{ displayLogTitle(selectedLog) }}｜{{ selectedLog.aiSummary || '还没有总结，可以直接告诉小记你想要什么样的总结。' }}</p>
       </div>
 
       <div v-if="previewSuggestion" class="xiaoji-preview">
@@ -102,7 +104,7 @@ watch(
           v-model="chatInputModel"
           type="textarea"
           :rows="4"
-          maxlength="300"
+          :maxlength="AI_CHAT_MESSAGE_MAX_LENGTH"
           show-word-limit
           placeholder="比如：这条总结再简洁一点，保留今天最重要的感受。"
           @keydown.ctrl.enter.prevent="emit('send')"
