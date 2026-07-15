@@ -32,6 +32,10 @@ public class AiTask {
 
     private Integer retryCount;
 
+    private LocalDateTime lastPublishAt;
+
+    private Integer publishAttempts;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
