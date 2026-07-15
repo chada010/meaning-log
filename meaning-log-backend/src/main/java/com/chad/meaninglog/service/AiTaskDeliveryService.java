@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Service
@@ -17,16 +18,17 @@ public class AiTaskDeliveryService {
 
     private final AiTaskRepository aiTaskRepository;
     private final AiTaskProducer aiTaskProducer;
+    private final Clock businessClock;
 
     public void publishImmediately(AiTaskMessage message) {
-        LocalDateTime attemptedAt = AiTaskTime.now();
+        LocalDateTime attemptedAt = LocalDateTime.now(businessClock);
         if (reserveImmediatePublish(message.taskId(), attemptedAt)) {
             send(message);
         }
     }
 
     public boolean republishIfDue(AiTask task, LocalDateTime cutoff) {
-        LocalDateTime attemptedAt = AiTaskTime.now();
+        LocalDateTime attemptedAt = LocalDateTime.now(businessClock);
         if (!reserveRecoveryPublish(task.getId(), cutoff, attemptedAt)) {
             return false;
         }

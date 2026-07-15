@@ -6,11 +6,13 @@ import com.chad.meaninglog.entity.AiTaskStatus;
 import com.chad.meaninglog.mq.AiTaskMessage;
 import com.chad.meaninglog.repository.AiTaskRepository;
 import com.chad.meaninglog.service.AiTaskNotifier;
-import com.chad.meaninglog.service.AiTaskTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
+
+import java.time.Clock;
+import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
@@ -19,6 +21,7 @@ public class AiTaskDlqListener {
 
     private final AiTaskRepository aiTaskRepository;
     private final AiTaskNotifier aiTaskNotifier;
+    private final Clock businessClock;
 
     @RabbitListener(queues = MqConfig.QUEUE_DLQ)
     public void handle(AiTaskMessage message) {
@@ -36,7 +39,8 @@ public class AiTaskDlqListener {
         if (errorMessage == null || errorMessage.isBlank()) {
             errorMessage = "Retries exhausted, moved to DLQ";
         }
-        int rows = aiTaskRepository.failPendingFromDlq(taskId, errorMessage, AiTaskTime.now());
+        int rows = aiTaskRepository.failPendingFromDlq(
+                taskId, errorMessage, LocalDateTime.now(businessClock));
         if (rows == 0) {
             log.warn("DLQ AI task {} changed state before failure update, ignoring", taskId);
             return;

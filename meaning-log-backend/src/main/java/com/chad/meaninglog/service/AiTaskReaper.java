@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -27,6 +28,7 @@ public class AiTaskReaper {
     private final AiTaskRepository aiTaskRepository;
     private final AiTaskDeliveryService aiTaskDeliveryService;
     private final AiTaskNotifier aiTaskNotifier;
+    private final Clock businessClock;
 
     @Value("${ai.task.running-timeout-seconds:600}")
     private long runningTimeoutSeconds;
@@ -42,7 +44,7 @@ public class AiTaskReaper {
 
     @Scheduled(fixedDelayString = "${ai.task.delivery.fixed-delay-ms:30000}")
     public void recoverStalePending() {
-        LocalDateTime cutoff = AiTaskTime.now().minusSeconds(pendingStaleSeconds);
+        LocalDateTime cutoff = LocalDateTime.now(businessClock).minusSeconds(pendingStaleSeconds);
         List<AiTask> tasks = aiTaskRepository.findPendingForPublish(cutoff, deliveryBatchSize);
         int attempted = 0;
         for (AiTask task : tasks) {
@@ -57,7 +59,7 @@ public class AiTaskReaper {
 
     @Scheduled(fixedDelayString = "${ai.task.reaper.fixed-delay-ms:60000}")
     public void reapStaleRunning() {
-        LocalDateTime failedAt = AiTaskTime.now();
+        LocalDateTime failedAt = LocalDateTime.now(businessClock);
         LocalDateTime cutoff = failedAt.minusSeconds(runningTimeoutSeconds);
         List<AiTask> tasks = aiTaskRepository.findStaleRunning(cutoff, reaperBatchSize);
         int reaped = 0;

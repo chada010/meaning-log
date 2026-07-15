@@ -14,7 +14,6 @@ import com.chad.meaninglog.service.AiTaskDeliveryService;
 import com.chad.meaninglog.service.AiTaskNotifier;
 import com.chad.meaninglog.service.AiTaskReaper;
 import com.chad.meaninglog.service.AiTaskService;
-import com.chad.meaninglog.service.AiTaskTime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +32,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -85,6 +85,7 @@ class AiTaskDeliveryRecoveryIntegrationTest {
     @Autowired private AiTaskExecutor aiTaskExecutor;
     @Autowired private AiTaskDlqListener aiTaskDlqListener;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private Clock businessClock;
 
     @MockitoSpyBean private AiTaskProducer aiTaskProducer;
     @MockitoBean private AiTaskNotifier aiTaskNotifier;
@@ -111,13 +112,14 @@ class AiTaskDeliveryRecoveryIntegrationTest {
 
     @Test
     void recoveryScanRepublishesOnlyConfiguredStaleBatch() throws Exception {
-        LocalDateTime staleAt = AiTaskTime.now().minusMinutes(5);
+        LocalDateTime staleAt = LocalDateTime.now(businessClock).minusMinutes(5);
         AiTask first = createTask(AiTaskStatus.PENDING, null, staleAt);
         AiTask second = createTask(AiTaskStatus.PENDING, null, staleAt);
         AiTask overflow = createTask(AiTaskStatus.PENDING, null, staleAt);
-        AiTask recent = createTask(AiTaskStatus.PENDING, null, AiTaskTime.now());
+        AiTask recent = createTask(AiTaskStatus.PENDING, null, LocalDateTime.now(businessClock));
         doNothing().when(aiTaskProducer).send(any());
-        AiTaskReaper reaper = new AiTaskReaper(aiTaskRepository, aiTaskDeliveryService, aiTaskNotifier);
+        AiTaskReaper reaper = new AiTaskReaper(
+                aiTaskRepository, aiTaskDeliveryService, aiTaskNotifier, businessClock);
         ReflectionTestUtils.setField(reaper, "pendingStaleSeconds", 60L);
         ReflectionTestUtils.setField(reaper, "deliveryBatchSize", 2);
 
@@ -132,7 +134,7 @@ class AiTaskDeliveryRecoveryIntegrationTest {
 
     @Test
     void concurrentDuplicateMessagesExecuteWorkOnlyOnce() throws Exception {
-        AiTask task = createTask(AiTaskStatus.PENDING, null, AiTaskTime.now());
+        AiTask task = createTask(AiTaskStatus.PENDING, null, LocalDateTime.now(businessClock));
         AiTaskMessage message = new AiTaskMessage(task.getId(), task.getTaskType());
         AtomicInteger workCalls = new AtomicInteger();
         CountDownLatch start = new CountDownLatch(1);
@@ -162,7 +164,7 @@ class AiTaskDeliveryRecoveryIntegrationTest {
 
     @Test
     void retryableFailureReturnsToPendingAndNextDeliverySucceeds() throws Exception {
-        AiTask task = createTask(AiTaskStatus.PENDING, null, AiTaskTime.now());
+        AiTask task = createTask(AiTaskStatus.PENDING, null, LocalDateTime.now(businessClock));
         AiTaskMessage message = new AiTaskMessage(task.getId(), task.getTaskType());
 
         assertThatThrownBy(() -> aiTaskExecutor.execute(message, AiTaskInputs.ChatInput.class,
@@ -181,7 +183,8 @@ class AiTaskDeliveryRecoveryIntegrationTest {
 
     @Test
     void nonRetryableAndTerminalDuplicateMessagesDoNotRunAgain() throws Exception {
-        AiTask unavailable = createTask(AiTaskStatus.PENDING, null, AiTaskTime.now());
+        AiTask unavailable = createTask(
+                AiTaskStatus.PENDING, null, LocalDateTime.now(businessClock));
         AiTaskMessage unavailableMessage = new AiTaskMessage(unavailable.getId(), unavailable.getTaskType());
         aiTaskExecutor.execute(unavailableMessage, AiTaskInputs.ChatInput.class,
                 (user, input) -> {
@@ -189,8 +192,8 @@ class AiTaskDeliveryRecoveryIntegrationTest {
                 });
         assertThat(aiTaskRepository.selectById(unavailable.getId()).getStatus()).isEqualTo(AiTaskStatus.FAILED);
 
-        AiTask success = createTask(AiTaskStatus.SUCCESS, null, AiTaskTime.now());
-        AiTask failed = createTask(AiTaskStatus.FAILED, null, AiTaskTime.now());
+        AiTask success = createTask(AiTaskStatus.SUCCESS, null, LocalDateTime.now(businessClock));
+        AiTask failed = createTask(AiTaskStatus.FAILED, null, LocalDateTime.now(businessClock));
         AtomicInteger workCalls = new AtomicInteger();
         aiTaskExecutor.execute(message(success), AiTaskInputs.ChatInput.class,
                 (user, input) -> workCalls.incrementAndGet());
@@ -206,8 +209,10 @@ class AiTaskDeliveryRecoveryIntegrationTest {
 
     @Test
     void staleRunningBecomesFailedAndNotifiesWaiters() throws Exception {
-        AiTask task = createTask(AiTaskStatus.RUNNING, null, AiTaskTime.now().minusMinutes(20));
-        AiTaskReaper reaper = new AiTaskReaper(aiTaskRepository, aiTaskDeliveryService, aiTaskNotifier);
+        AiTask task = createTask(
+                AiTaskStatus.RUNNING, null, LocalDateTime.now(businessClock).minusMinutes(20));
+        AiTaskReaper reaper = new AiTaskReaper(
+                aiTaskRepository, aiTaskDeliveryService, aiTaskNotifier, businessClock);
         ReflectionTestUtils.setField(reaper, "runningTimeoutSeconds", 60L);
         ReflectionTestUtils.setField(reaper, "reaperBatchSize", 10);
 
@@ -223,7 +228,8 @@ class AiTaskDeliveryRecoveryIntegrationTest {
     void taskOwnershipCheckRemainsUnchanged() throws Exception {
         UserAccount owner = createUser("owner");
         UserAccount other = createUser("other");
-        AiTask task = createTask(AiTaskStatus.PENDING, owner.getId(), AiTaskTime.now());
+        AiTask task = createTask(
+                AiTaskStatus.PENDING, owner.getId(), LocalDateTime.now(businessClock));
 
         assertThat(aiTaskService.findByIdForUser(owner, task.getId()).id()).isEqualTo(task.getId());
         assertThatThrownBy(() -> aiTaskService.findByIdForUser(other, task.getId()))

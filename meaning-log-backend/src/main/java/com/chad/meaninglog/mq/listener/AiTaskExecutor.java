@@ -8,12 +8,14 @@ import com.chad.meaninglog.mq.AiTaskMessage;
 import com.chad.meaninglog.repository.AiTaskRepository;
 import com.chad.meaninglog.repository.UserAccountRepository;
 import com.chad.meaninglog.service.AiTaskNotifier;
-import com.chad.meaninglog.service.AiTaskTime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.Clock;
+import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
@@ -26,6 +28,7 @@ public class AiTaskExecutor {
     private final UserAccountRepository userAccountRepository;
     private final ObjectMapper objectMapper;
     private final AiTaskNotifier aiTaskNotifier;
+    private final Clock businessClock;
 
     @FunctionalInterface
     public interface Work<I> {
@@ -44,7 +47,7 @@ public class AiTaskExecutor {
             return;
         }
 
-        int rows = aiTaskRepository.transitionToRunning(taskId, AiTaskTime.now());
+        int rows = aiTaskRepository.transitionToRunning(taskId, LocalDateTime.now(businessClock));
         if (rows == 0) {
             log.debug("AI task {} was claimed by another consumer", taskId);
             return;
@@ -57,7 +60,8 @@ public class AiTaskExecutor {
             I input = objectMapper.readValue(task.getInputJson(), inputType);
             Object result = work.apply(user, input);
             String resultJson = objectMapper.writeValueAsString(result);
-            int completed = aiTaskRepository.completeRunning(taskId, resultJson, AiTaskTime.now());
+            int completed = aiTaskRepository.completeRunning(
+                    taskId, resultJson, LocalDateTime.now(businessClock));
             if (completed > 0) {
                 aiTaskNotifier.publishDone(taskId);
                 log.info("AI task {} completed successfully", taskId);
@@ -83,7 +87,8 @@ public class AiTaskExecutor {
     }
 
     private void markFailed(Long taskId, String errorMessage) {
-        int rows = aiTaskRepository.failRunning(taskId, truncate(errorMessage), AiTaskTime.now());
+        int rows = aiTaskRepository.failRunning(
+                taskId, truncate(errorMessage), LocalDateTime.now(businessClock));
         if (rows > 0) {
             aiTaskNotifier.publishDone(taskId);
             log.warn("AI task {} marked FAILED: {}", taskId, errorMessage);
@@ -93,7 +98,8 @@ public class AiTaskExecutor {
     }
 
     private void returnToPending(Long taskId, Exception ex) {
-        int rows = aiTaskRepository.returnRunningToPending(taskId, truncate(ex.getMessage()), AiTaskTime.now());
+        int rows = aiTaskRepository.returnRunningToPending(
+                taskId, truncate(ex.getMessage()), LocalDateTime.now(businessClock));
         if (rows > 0) {
             log.warn("AI task {} attempt failed and returned to PENDING: {}", taskId, ex.getMessage());
         } else {
