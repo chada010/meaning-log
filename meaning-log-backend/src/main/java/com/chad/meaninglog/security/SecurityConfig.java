@@ -56,10 +56,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/reset-password", "/api/auth/send-code").permitAll()
                         .requestMatchers("/api/trial/**").permitAll()
-                        // TODO: 生产环境需限制 Swagger 与 Actuator 访问（Nginx 白名单或独立 basic-auth）
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
-                                "/doc.html", "/webjars/**", "/favicon.ico").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
+                                "/swagger-ui.html", "/doc.html", "/webjars/**").authenticated()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
                 )
