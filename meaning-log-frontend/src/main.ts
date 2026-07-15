@@ -4,6 +4,7 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import './style.css'
 import './assets/styles/home-mobile.css'
+import './assets/styles/report-mobile.css'
 import App from './App.vue'
 import router from './router'
 

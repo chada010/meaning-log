@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, type ComponentPublicInstance } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Compass, MagicStick, TrendCharts } from '@element-plus/icons-vue'
 import {
@@ -10,7 +10,7 @@ import {
 } from '../api/logs'
 import { runDailySummaryTask, runPeriodReportTask, runReportRefineTask } from '../api/aiTask'
 
-type ReportMode = 'weekly' | 'mood' | 'themes' | 'daily' | 'monthly' | 'custom'
+export type ReportMode = 'weekly' | 'mood' | 'themes' | 'daily' | 'monthly' | 'custom'
 interface ReportForm { mode: ReportMode; date: string; range: string[] }
 
 const defaultChatMessages: AiChatMessage[] = [{
@@ -21,6 +21,9 @@ const defaultChatMessages: AiChatMessage[] = [{
 
 export function useAiReport() {
   const formRef = ref<FormInstance>()
+  const setFormRef = (value: Element | ComponentPublicInstance | null) => {
+    formRef.value = value as FormInstance | undefined
+  }
   const loading = ref(false)
   const historyLoading = ref(false)
   const chatVisible = ref(false)
@@ -173,6 +176,6 @@ export function useAiReport() {
     applyLoading, applyPreview, chatBodyRef, chatInput, chatLoading, chatMessages, chatVisible, companionCards,
     form, formRef, formatTime, generate, handleModeChange, historyLoading, lastReportSnapshot, loading,
     openChat, previewReport, previewTagList, report, reports, rules, selectCompanionCard, selectReport,
-    sendChatMessage, setChatBody, tagList, undoReportApply,
+    sendChatMessage, setChatBody, setFormRef, tagList, undoReportApply,
   }
 }
