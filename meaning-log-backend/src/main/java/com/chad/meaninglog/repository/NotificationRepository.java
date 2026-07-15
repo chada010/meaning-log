@@ -12,7 +12,7 @@ public interface NotificationRepository extends BaseMapper<Notification> {
         LambdaQueryWrapper<Notification> query = new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getReceiverId, receiverId);
         if (unreadOnly) {
-            query.eq(Notification::isRead, false);
+            query.eq(Notification::isReadFlag, false);
         }
         return selectList(query
                 .orderByDesc(Notification::getCreatedAt)
@@ -22,13 +22,13 @@ public interface NotificationRepository extends BaseMapper<Notification> {
     default long countUnread(Long receiverId) {
         return selectCount(new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getReceiverId, receiverId)
-                .eq(Notification::isRead, false));
+                .eq(Notification::isReadFlag, false));
     }
 
     default int markAsRead(Long id, Long receiverId) {
         Notification update = new Notification();
         update.setId(id);
-        update.setRead(true);
+        update.setReadFlag(true);
         return update(update, new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getId, id)
                 .eq(Notification::getReceiverId, receiverId));
@@ -36,9 +36,9 @@ public interface NotificationRepository extends BaseMapper<Notification> {
 
     default int markAllAsRead(Long receiverId) {
         Notification update = new Notification();
-        update.setRead(true);
+        update.setReadFlag(true);
         return update(update, new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getReceiverId, receiverId)
-                .eq(Notification::isRead, false));
+                .eq(Notification::isReadFlag, false));
     }
 }

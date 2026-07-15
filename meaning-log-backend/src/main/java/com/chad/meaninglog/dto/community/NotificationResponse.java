@@ -28,7 +28,7 @@ public class NotificationResponse {
                 .publicLogId(notification.getPublicLogId())
                 .commentId(notification.getCommentId())
                 .content(notification.getContent())
-                .read(notification.isRead())
+                .read(notification.isReadFlag())
                 .createdAt(notification.getCreatedAt())
                 .build();
     }

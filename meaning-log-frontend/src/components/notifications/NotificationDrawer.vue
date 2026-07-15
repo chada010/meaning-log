@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { UserFilled } from '@element-plus/icons-vue'
-import { ElButton, ElDrawer, ElEmpty, ElIcon, ElSkeleton } from 'element-plus'
+import { ChatDotRound, Check, UserFilled } from '@element-plus/icons-vue'
+import { ElDrawer, ElIcon, ElSkeleton } from 'element-plus'
 import { useNotificationStore } from '../../stores/notificationStore'
 import type { NotificationItem } from '../../api/notifications'
 import { formatRelativeTime } from '../../utils/relativeTime'
@@ -76,33 +76,44 @@ const initialLoading = computed(() => store.loading && !store.initialized)
   <el-drawer
     v-model="visible"
     class="notification-drawer"
-    title="通知"
-    size="380px"
+    :with-header="false"
+    size="420px"
     append-to-body
   >
-    <template #header>
-      <div class="notification-drawer__header">
-        <strong>通知</strong>
-        <el-button
-          text
-          type="primary"
+    <div class="notification-drawer__inner">
+      <header class="notification-drawer__header">
+        <div>
+          <p class="eyebrow">Inbox</p>
+          <h2>通知</h2>
+          <p class="notification-drawer__subtitle">
+            {{ store.hasUnread ? `有 ${store.unreadCount} 条新消息等着你` : '暂时没有新消息' }}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="notification-drawer__mark-all"
           :disabled="!store.hasUnread"
           @click="handleMarkAll"
-        >全部已读</el-button>
+        >
+          <el-icon><Check /></el-icon>
+          <span>全部已读</span>
+        </button>
+      </header>
+
+      <div v-if="initialLoading" class="notification-drawer__loading">
+        <el-skeleton :rows="3" animated />
+        <el-skeleton :rows="3" animated />
       </div>
-    </template>
 
-    <div v-if="initialLoading" class="notification-drawer__loading">
-      <el-skeleton :rows="3" animated />
-      <el-skeleton :rows="3" animated />
-    </div>
+      <div v-else-if="!store.items.length" class="notification-drawer__empty">
+        <span class="notification-drawer__empty-icon">
+          <el-icon><ChatDotRound /></el-icon>
+        </span>
+        <p>还没有新的通知</p>
+        <small>有人赞你、评论你、关注你时，会先在这里出现。</small>
+      </div>
 
-    <el-empty
-      v-else-if="!store.items.length"
-      description="还没有通知"
-    />
-
-    <ul v-else class="notification-list">
+      <ul v-else class="notification-list">
       <li
         v-for="item in store.items"
         :key="item.id"
@@ -120,11 +131,15 @@ const initialLoading = computed(() => store.loading && !store.initialized)
       </li>
     </ul>
 
-    <div v-if="store.items.length && store.hasMore" class="notification-drawer__more">
-      <el-button :loading="store.loading" plain @click="handleLoadMore">
-        加载更多
-      </el-button>
+      <div v-if="store.items.length && store.hasMore" class="notification-drawer__more">
+        <button
+          type="button"
+          class="notification-drawer__more-btn"
+          :disabled="store.loading"
+          @click="handleLoadMore"
+        >{{ store.loading ? '加载中…' : '加载更多' }}</button>
+      </div>
+      <p v-else-if="store.items.length" class="notification-drawer__end">— 已经到底了 —</p>
     </div>
-    <p v-else-if="store.items.length" class="notification-drawer__end">— 已经到底了 —</p>
   </el-drawer>
 </template>

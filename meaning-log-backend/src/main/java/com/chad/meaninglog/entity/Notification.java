@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -37,7 +38,8 @@ public class Notification {
     private String content;
 
     @TableField("is_read")
-    private boolean read = false;
+    @JsonProperty("read")
+    private boolean readFlag = false;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
