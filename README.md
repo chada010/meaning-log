@@ -9,10 +9,10 @@
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3-FF6600)
 ![DeepSeek AI](https://img.shields.io/badge/AI-DeepSeek-6544A0)
 
-🌐 **在线体验**:[www.chada010.freeddns.org](https://www.chada010.freeddns.org)
+🌐 **在线体验**:[han.zhaisir.com](https://han.zhaisir.com)
 
 > **快速体验(免注册)**
-> - 🎭 **游客试用**:访问 [/trial](https://www.chada010.freeddns.org/trial) 直接体验 AI 日志分析,无需登录
+> - 🎭 **游客试用**:访问 [/trial](https://han.zhaisir.com/trial) 直接体验 AI 日志分析,无需登录
 > - 🔒 **账号策略**:仓库不公开共享账号密码,避免访客互相污染日志、通知和 AI 额度
 
 AI 辅助日记应用。用户写下日志后,AI「小记」自动生成标题、摘要、标签,并可与用户多轮对话精修输出。同时内置**社区模块**:日志一键发布到公开 feed,支持点赞、评论、关注、SSE 实时通知,形成"个人写作 → 公开分享"的完整闭环。
