@@ -69,6 +69,7 @@ services:
       start_period: 30s
 
   backend:
+    image: ${BACKEND_IMAGE:-meaning-log-backend:local}
     build:
       context: ./meaning-log-backend
     restart: unless-stopped
@@ -114,6 +115,12 @@ services:
     ports:
       # 只 bind localhost,不暴露到公网;Nginx 在宿主机反代
       - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
 volumes:
   mysql-data:

@@ -79,7 +79,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-      - run: ./mvnw test
+      - run: ./mvnw verify
         env:
           MYSQLHOST: 127.0.0.1
           MYSQLPORT: 3306
@@ -92,3 +92,17 @@ jobs:
           RABBITMQ_PORT: 5672
           DEEPSEEK_API_KEY: ci-not-a-real-key
           JWT_SECRET: Z3J5bEJ4L2lxanFQU0xJMzVGcFhTc0cwWFFUTzVaWlNkRTY=
+
+  deployment-config:
+    name: Deployment config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment script
+        run: |
+          bash -n scripts/deploy-vps.sh
+          shellcheck scripts/deploy-vps.sh
+      - name: Validate production compose
+        env:
+          BACKEND_IMAGE: ghcr.io/chada010/meaning-log-backend:0000000000000000000000000000000000000000
+        run: docker compose -f docker-compose.prod.yml --env-file .env.prod.example config --quiet
