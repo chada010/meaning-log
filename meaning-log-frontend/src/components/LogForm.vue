@@ -22,8 +22,8 @@ const {
 
 <template>
   <el-form :ref="setFormRef" class="log-form" :model="form" :rules="rules" label-position="top">
-    <el-form-item label="标题" prop="title">
-      <el-input v-model="form.title" maxlength="100" show-word-limit placeholder="今天有什么值得记住的小事？" />
+    <el-form-item label="标题（可选）" prop="title">
+      <el-input v-model="form.title" maxlength="100" show-word-limit placeholder="不写也行，小记会替你想一个" />
     </el-form-item>
     <div class="form-row">
       <el-form-item label="日期" prop="logDate">

@@ -74,7 +74,7 @@ export interface LogNavigation {
 }
 
 export interface MeaningLogRequest {
-  title: string
+  title?: string
   content: string
   logDate: string
   mood?: string

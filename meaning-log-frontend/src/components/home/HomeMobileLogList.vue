@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { MoreFilled, Star, StarFilled } from '@element-plus/icons-vue'
 import type { MeaningLog } from '../../api/logs'
-import { previewLogContent, splitLogTags } from '../../utils/logDisplay'
+import { displayLogTitle, previewLogContent, splitLogTags } from '../../utils/logDisplay'
 
 defineProps<{
   logs: MeaningLog[]
@@ -41,7 +41,7 @@ const handleCommand = (command: string | number | object, log: MeaningLog) => {
           <span>{{ log.logDate }}</span>
           <span v-if="log.mood">{{ log.mood }}</span>
         </span>
-        <strong class="mobile-log-title">{{ log.title }}</strong>
+        <strong class="mobile-log-title">{{ displayLogTitle(log) }}</strong>
         <span class="mobile-log-summary">{{ previewLogContent(log.content) }}</span>
         <span v-if="splitLogTags(log.aiTags).length" class="mobile-log-tags">
           <el-tag

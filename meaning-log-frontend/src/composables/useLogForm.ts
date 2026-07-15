@@ -19,10 +19,7 @@ interface LogFormEmit {
 }
 
 const rules: FormRules<MeaningLogRequest> = {
-  title: [
-    { required: true, message: '请输入标题', trigger: 'blur' },
-    { max: 100, message: '标题不能超过 100 个字符', trigger: 'blur' },
-  ],
+  title: [{ max: 100, message: '标题不能超过 100 个字符', trigger: 'blur' }],
   content: [{ required: true, message: '请输入内容', trigger: 'blur' }],
   logDate: [{ required: true, message: '请选择日期', trigger: 'change' }],
   mood: [{ max: 30, message: '心情不能超过 30 个字符', trigger: 'blur' }],
@@ -76,7 +73,7 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
     if (!value || restoredDraft.value) {
       return
     }
-    form.title = value.title
+    form.title = value.title || ''
     form.content = value.content
     form.logDate = value.logDate
     form.mood = value.mood || ''
@@ -228,8 +225,12 @@ export function useLogForm(props: LogFormProps, emit: LogFormEmit) {
       window.clearTimeout(draftTimer)
     }
     emit('submit', {
-      title: form.title.trim(), content: form.content.trim(), logDate: form.logDate,
-      mood: form.mood?.trim() || undefined, favorite: form.favorite, images: form.images,
+      title: form.title?.trim() || undefined,
+      content: form.content.trim(),
+      logDate: form.logDate,
+      mood: form.mood?.trim() || undefined,
+      favorite: form.favorite,
+      images: form.images,
     })
   }
 

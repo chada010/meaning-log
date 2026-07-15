@@ -13,7 +13,6 @@ import java.util.List;
 @Setter
 public class MeaningLogRequest {
 
-    @NotBlank(message = "标题不能为空")
     @Size(max = 100, message = "标题不能超过100个字符")
     private String title;
 
