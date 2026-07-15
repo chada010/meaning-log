@@ -12,42 +12,31 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@TableName("public_logs")
-public class PublicLog {
+@TableName("community_redis_repairs")
+public class CommunityRedisRepair {
 
-    public enum Status {
-        VISIBLE,
-        HIDDEN
+    public enum Type {
+        POST_STATE,
+        POST_PUBLISH,
+        FOLLOW_STATE
     }
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long logId;
+    private String repairType;
 
-    private Long userId;
+    private Long aggregateId;
 
-    private LocalDateTime publishedAt;
+    private Long relatedId;
 
-    private long viewCount = 0L;
+    private int attemptCount;
 
-    private long likeCount = 0L;
-
-    private long commentCount = 0L;
-
-    private long cacheVersion = 0L;
-
-    private String status = Status.VISIBLE.name();
+    private String lastError;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
-
-    @TableField(exist = false)
-    private MeaningLog log;
-
-    @TableField(exist = false)
-    private UserAccount author;
 }

@@ -1,6 +1,10 @@
 package com.chad.meaninglog.mq;
 
+import com.chad.meaninglog.entity.MeaningLog;
+import com.chad.meaninglog.entity.PublicLog;
 import com.chad.meaninglog.entity.UserAccount;
+import com.chad.meaninglog.repository.MeaningLogRepository;
+import com.chad.meaninglog.repository.PublicLogRepository;
 import com.chad.meaninglog.repository.UserAccountRepository;
 import com.chad.meaninglog.service.community.NotificationService;
 import com.chad.meaninglog.service.community.NotificationSseManager;
@@ -20,6 +24,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -78,6 +84,12 @@ class NotificationMqIntegrationTest {
     private UserAccountRepository userAccountRepository;
 
     @Autowired
+    private MeaningLogRepository meaningLogRepository;
+
+    @Autowired
+    private PublicLogRepository publicLogRepository;
+
+    @Autowired
     private PlatformTransactionManager txManager;
 
     @MockitoSpyBean
@@ -87,9 +99,10 @@ class NotificationMqIntegrationTest {
     void notifyLikeAfterCommitReachesSseManagerViaFanout() {
         UserAccount actor = createUser("actor-commit");
         UserAccount receiver = createUser("receiver-commit");
+        PublicLog publicLog = createPublicLog(receiver);
 
         new TransactionTemplate(txManager).executeWithoutResult(status ->
-                notificationService.notifyLike(actor, receiver.getId(), 42L));
+                notificationService.notifyLike(actor, receiver.getId(), publicLog.getId()));
 
         await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(200)).untilAsserted(() ->
                 verify(sseManager, atLeastOnce()).push(eq(receiver.getId()), anyString()));
@@ -99,10 +112,11 @@ class NotificationMqIntegrationTest {
     void notifyLikeInRolledBackTransactionNeverReachesSseManager() throws Exception {
         UserAccount actor = createUser("actor-rollback");
         UserAccount receiver = createUser("receiver-rollback");
+        PublicLog publicLog = createPublicLog(receiver);
 
         try {
             new TransactionTemplate(txManager).executeWithoutResult(status -> {
-                notificationService.notifyLike(actor, receiver.getId(), 99L);
+                notificationService.notifyLike(actor, receiver.getId(), publicLog.getId());
                 status.setRollbackOnly();
             });
         } catch (RuntimeException ignore) {
@@ -120,5 +134,22 @@ class NotificationMqIntegrationTest {
         user.setUsername(suffix);
         user.setPasswordHash("test-hash");
         return userAccountRepository.save(user);
+    }
+
+    private PublicLog createPublicLog(UserAccount author) {
+        MeaningLog log = new MeaningLog();
+        log.setUser(author);
+        log.setTitle("通知测试日志");
+        log.setContent("通知必须引用真实帖子");
+        log.setLogDate(LocalDate.of(2026, 7, 15));
+        meaningLogRepository.save(log);
+
+        PublicLog publicLog = new PublicLog();
+        publicLog.setLogId(log.getId());
+        publicLog.setUserId(author.getId());
+        publicLog.setPublishedAt(LocalDateTime.of(2026, 7, 15, 12, 0));
+        publicLog.setStatus(PublicLog.Status.VISIBLE.name());
+        publicLog.setCacheVersion(1L);
+        return publicLogRepository.save(publicLog);
     }
 }

@@ -9,6 +9,7 @@ services:
     image: mysql:8.4
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
@@ -18,6 +19,7 @@ services:
       - --innodb-log-file-size=48M
       - --skip-log-bin
       - --max-connections=64
+      - --default-time-zone=+08:00
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -35,7 +37,13 @@ services:
       - --maxmemory
       - 100mb
       - --maxmemory-policy
-      - allkeys-lru
+      - noeviction
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+    environment:
+      TZ: Asia/Shanghai
     volumes:
       - redis-data:/data
     healthcheck:
@@ -48,6 +56,7 @@ services:
     image: rabbitmq:3-alpine
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
@@ -71,6 +80,7 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
+      TZ: Asia/Shanghai
       # database
       MYSQLHOST: mysql
       MYSQLPORT: 3306
@@ -100,7 +110,7 @@ services:
       # CORS(加你的 Vercel 域名 / 自建前端域名,逗号分隔)
       APP_CORS_ADDITIONAL_ORIGINS: ${APP_CORS_ADDITIONAL_ORIGINS:-}
       # JVM
-      JAVA_OPTS: "-Xmx384m -Xms256m"
+      JAVA_OPTS: "-Xmx384m -Xms256m -Duser.timezone=Asia/Shanghai"
     ports:
       # 只 bind localhost,不暴露到公网;Nginx 在宿主机反代
       - "127.0.0.1:8080:8080"

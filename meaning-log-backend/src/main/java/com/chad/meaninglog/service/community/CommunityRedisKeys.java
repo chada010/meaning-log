@@ -9,6 +9,7 @@ public final class CommunityRedisKeys {
 
     public static final String HOT_GLOBAL = "community:hot:global";
     public static final String DIRTY_COUNTERS = "community:dirty:counters";
+    public static final String DIRTY_COUNTERS_PROCESSING = "community:dirty:counters:processing";
 
     private static final String FEED_USER_PREFIX = "community:feed:user:";
     private static final String LIKE_BITMAP_PREFIX = "community:like:bitmap:";
@@ -18,7 +19,9 @@ public final class CommunityRedisKeys {
     private static final String FOLLOWING_PREFIX = "community:following:";
     private static final String FOLLOWER_PREFIX = "community:follower:";
     private static final String PV_HLL_PREFIX = "community:pv:";
-    private static final String PUBLISH_LOCK_PREFIX = "community:lock:publish:";
+    private static final String POST_VERSION_PREFIX = "community:version:post:";
+    private static final String FOLLOW_VERSION_PREFIX = "community:version:follow:";
+    private static final String BITMAP_REBUILD_PREFIX = "community:rebuild:bitmap:";
 
     private CommunityRedisKeys() {
     }
@@ -55,7 +58,15 @@ public final class CommunityRedisKeys {
         return PV_HLL_PREFIX + publicLogId + ":" + date.format(DATE_FORMAT);
     }
 
-    public static String publishLock(Long userId) {
-        return PUBLISH_LOCK_PREFIX + userId;
+    public static String postVersion(Long publicLogId) {
+        return POST_VERSION_PREFIX + publicLogId;
+    }
+
+    public static String followVersion(Long followerId, Long followeeId) {
+        return FOLLOW_VERSION_PREFIX + followerId + ":" + followeeId;
+    }
+
+    public static String bitmapRebuild(Long publicLogId, String token) {
+        return BITMAP_REBUILD_PREFIX + publicLogId + ":" + token;
     }
 }
