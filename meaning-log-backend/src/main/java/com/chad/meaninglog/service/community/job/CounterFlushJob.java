@@ -37,7 +37,10 @@ public class CounterFlushJob {
     private final CommunityCounterBatchRepository counterBatchRepository;
     private final Clock businessClock;
 
-    @Scheduled(fixedDelay = 5000L, initialDelay = 5000L)
+    @Scheduled(
+            fixedDelayString = "${community.counter-flush.fixed-delay-ms:5000}",
+            initialDelayString = "${community.counter-flush.initial-delay-ms:5000}"
+    )
     public void flush() {
         List<Long> ids = claim();
         if (ids.isEmpty()) {

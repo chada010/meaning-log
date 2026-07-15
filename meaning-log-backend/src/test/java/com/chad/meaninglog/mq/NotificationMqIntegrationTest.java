@@ -46,7 +46,12 @@ import static org.mockito.Mockito.verify;
 @SpringBootTest(properties = {
         "jwt.secret=Z3J5bEJ4L2lxanFQU0xJMzVGcFhTc0cwWFFUTzVaWlNkRTY=",
         "spring.mail.password=test-smtp-password",
-        "mail.from=noreply@example.com"
+        "mail.from=noreply@example.com",
+        "community.redis-repair.initial-delay-ms=3600000",
+        "community.counter-flush.initial-delay-ms=3600000",
+        "community.hot-score.initial-delay-ms=3600000",
+        "community.reconcile.cron=-",
+        "ai.task.reaper.enabled=false"
 })
 class NotificationMqIntegrationTest {
 

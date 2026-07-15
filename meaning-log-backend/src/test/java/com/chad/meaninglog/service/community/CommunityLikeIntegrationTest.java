@@ -58,7 +58,11 @@ import static org.mockito.Mockito.doAnswer;
 @SpringBootTest(properties = {
         "spring.mail.password=test-smtp-password",
         "mail.from=noreply@example.com",
-        "spring.task.scheduling.enabled=false",
+        "community.redis-repair.initial-delay-ms=3600000",
+        "community.counter-flush.initial-delay-ms=3600000",
+        "community.hot-score.initial-delay-ms=3600000",
+        "community.reconcile.cron=-",
+        "ai.task.reaper.enabled=false",
         "jwt.secret=Z3J5bEJ4L2lxanFQU0xJMzVGcFhTc0cwWFFUTzVaWlNkRTY="
 })
 class CommunityLikeIntegrationTest {

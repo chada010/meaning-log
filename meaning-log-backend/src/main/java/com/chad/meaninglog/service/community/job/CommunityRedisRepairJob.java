@@ -16,7 +16,10 @@ public class CommunityRedisRepairJob {
 
     private final CommunityRedisRepairService repairService;
 
-    @Scheduled(fixedDelay = 10_000L, initialDelay = 10_000L)
+    @Scheduled(
+            fixedDelayString = "${community.redis-repair.fixed-delay-ms:10000}",
+            initialDelayString = "${community.redis-repair.initial-delay-ms:10000}"
+    )
     public void repair() {
         try {
             int processed = repairService.processPending(BATCH_SIZE);

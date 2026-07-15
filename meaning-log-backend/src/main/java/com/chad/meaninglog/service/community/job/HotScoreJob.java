@@ -31,7 +31,10 @@ public class HotScoreJob {
     private final HotScoreCalculator hotScoreCalculator;
     private final Clock businessClock;
 
-    @Scheduled(fixedDelay = 5 * 60 * 1000L, initialDelay = 60 * 1000L)
+    @Scheduled(
+            fixedDelayString = "${community.hot-score.fixed-delay-ms:300000}",
+            initialDelayString = "${community.hot-score.initial-delay-ms:60000}"
+    )
     public void recompute() {
         List<PublicLog> candidates = publicLogRepository.findRecentVisible(
                 LocalDateTime.now(businessClock).minusDays(RECENT_DAYS), MAX_CANDIDATES);
