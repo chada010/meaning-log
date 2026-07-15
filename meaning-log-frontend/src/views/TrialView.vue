@@ -33,17 +33,27 @@ const handleAnalyze = async (value: MeaningLogRequest) => {
   }
 }
 
-const goRegister = () => {
-  if (lastDraft.value) {
-    savePendingTrial({ value: lastDraft.value, ai: aiResult.value })
+const preservePendingTrial = () => {
+  if (!lastDraft.value) {
+    return
   }
+  const result = savePendingTrial({ value: lastDraft.value, ai: aiResult.value })
+  if (result.status !== 'saved') {
+    ElMessage.warning('浏览器存储空间不足，试用内容未能自动带到登录后')
+    return
+  }
+  if (result.omittedImageCount > 0) {
+    ElMessage.info('文字和 AI 结果会保留，图片需要登录后重新选择')
+  }
+}
+
+const goRegister = () => {
+  preservePendingTrial()
   router.push({ name: 'register' })
 }
 
 const goLogin = () => {
-  if (lastDraft.value) {
-    savePendingTrial({ value: lastDraft.value, ai: aiResult.value })
-  }
+  preservePendingTrial()
   router.push({ name: 'login' })
 }
 </script>

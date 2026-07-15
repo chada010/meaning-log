@@ -6,6 +6,7 @@ import { ChatDotRound, Pointer, View } from '@element-plus/icons-vue'
 import { useCommunityFeed } from '../../composables/useCommunityFeed'
 import type { FeedType } from '../../api/community'
 import { displayLogTitle } from '../../utils/logDisplay'
+import { formatRelativeTime } from '../../utils/relativeTime'
 
 const router = useRouter()
 const feed = useCommunityFeed()
@@ -35,18 +36,6 @@ const tagList = (tags: string | null) =>
 const previewText = (item: { aiSummary: string | null; title: string | null }) =>
   item.aiSummary ?? item.title ?? ''
 
-const publishedLabel = (iso: string | null | undefined) => {
-  if (!iso) return ''
-  const value = new Date(iso)
-  if (Number.isNaN(value.getTime())) return ''
-  const now = Date.now()
-  const diffSec = Math.max(0, Math.floor((now - value.getTime()) / 1000))
-  if (diffSec < 60) return '刚刚'
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`
-  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)} 天前`
-  return value.toISOString().slice(0, 10)
-}
 </script>
 
 <template>
@@ -88,7 +77,7 @@ const publishedLabel = (iso: string | null | undefined) => {
           <a class="community-card__author" @click="openProfile(item.author?.id ?? 0, $event)">
             @{{ item.author?.username ?? '匿名' }}
           </a>
-          <span class="community-card__time">{{ publishedLabel(item.publishedAt) }}</span>
+          <span class="community-card__time">{{ formatRelativeTime(item.publishedAt) }}</span>
         </header>
         <h3 class="community-card__title">{{ displayLogTitle(item) }}</h3>
         <p class="community-card__excerpt">{{ previewText(item) }}</p>
