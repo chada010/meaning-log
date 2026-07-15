@@ -8,6 +8,7 @@ import {
   type MeaningLog,
 } from '../api/logs'
 import { runLogRefineTask } from '../api/aiTask'
+import { displayLogTitle } from '../utils/logDisplay'
 
 const EMPTY_CHAT_MESSAGE: AiChatMessage = {
   id: 0,
@@ -56,7 +57,7 @@ export const useHomeAiChat = (logs: Ref<MeaningLog[]>) => {
           {
             id: 0,
             role: 'assistant',
-            content: `正在整理「${log.title}」。你可以告诉我想把总结改得更短、更具体，或者换一种语气。`,
+            content: `正在整理「${displayLogTitle(log)}」。你可以告诉我想把总结改得更短、更具体，或者换一种语气。`,
             createdAt: '',
           },
         ]

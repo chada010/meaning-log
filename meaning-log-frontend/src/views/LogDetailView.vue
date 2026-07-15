@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, ArrowRight, ChatDotRound, Check, Delete, Edit, MagicStick, Position, Promotion, RefreshLeft, Star } from '@element-plus/icons-vue'
 import { useLogDetail } from '../composables/useLogDetail'
+import { displayLogTitle } from '../utils/logDisplay'
 import { publishLog } from '../api/community'
 
 const props = defineProps<{ id: number }>()
@@ -40,7 +41,7 @@ const handlePublish = async () => {
   <section v-loading="loading" class="page-panel">
     <template v-if="log">
       <div class="page-heading">
-        <div><p class="eyebrow">{{ log.logDate }}</p><h2>{{ log.title }}</h2></div>
+        <div><p class="eyebrow">{{ log.logDate }}</p><h2>{{ displayLogTitle(log) }}</h2></div>
         <div class="button-row">
           <el-button @click="router.push({ name: 'home' })">返回列表</el-button>
           <el-button plain :icon="ArrowLeft" :disabled="!navigation?.previous" @click="goLog(navigation?.previous?.id)">上一条</el-button>

@@ -9,6 +9,7 @@ import {
   updateLogFavorite,
   type MeaningLog,
 } from '../api/logs'
+import { displayLogTitle } from '../utils/logDisplay'
 
 const getToday = () => {
   const now = new Date()
@@ -16,11 +17,6 @@ const getToday = () => {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-const buildQuickTitle = (content: string) => {
-  const firstLine = content.split(/\r?\n/).find((line) => line.trim())?.trim() ?? '今天的记录'
-  return firstLine.length > 30 ? `${firstLine.slice(0, 30)}...` : firstLine
 }
 
 export const useHomeLogs = () => {
@@ -106,7 +102,6 @@ export const useHomeLogs = () => {
     quickSaving.value = true
     try {
       const { data } = await createLog({
-        title: buildQuickTitle(content),
         content,
         logDate: getToday(),
         favorite: false,
@@ -132,7 +127,7 @@ export const useHomeLogs = () => {
   }
 
   const deleteEntry = async (log: MeaningLog) => {
-    await ElMessageBox.confirm(`确定删除「${log.title}」吗？`, '删除日志', {
+    await ElMessageBox.confirm(`确定删除「${displayLogTitle(log)}」吗？`, '删除日志', {
       type: 'warning',
       confirmButtonText: '删除',
       cancelButtonText: '取消',

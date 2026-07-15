@@ -22,7 +22,7 @@ const form = reactive<MeaningLogForm>({
 
 const rules: FormRules<MeaningLogForm> = {
   logDate: [{ required: true, message: '请选择日期', trigger: 'change' }],
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  title: [{ max: 50, message: '标题不能超过 50 个字符', trigger: 'blur' }],
   content: [{ required: true, message: '请输入有意义的事情', trigger: 'blur' }],
 }
 
@@ -47,8 +47,8 @@ const handleSubmit = async () => {
       />
     </el-form-item>
 
-    <el-form-item label="标题" prop="title">
-      <el-input v-model="form.title" maxlength="50" placeholder="例如：完成了第一个版本" show-word-limit />
+    <el-form-item label="标题（可选）" prop="title">
+      <el-input v-model="form.title" maxlength="50" placeholder="不写也行，小记会替你想一个" show-word-limit />
     </el-form-item>
 
     <el-form-item label="有意义的事情" prop="content">

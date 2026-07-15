@@ -2,7 +2,7 @@
 import { Calendar, ChatDotRound, Delete, Edit, Plus, Search, Star, View } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import type { MeaningLog } from '../../api/logs'
-import { formatLogTime, previewLogContent, splitLogTags } from '../../utils/logDisplay'
+import { displayLogTitle, formatLogTime, previewLogContent, splitLogTags } from '../../utils/logDisplay'
 import HomeMobileFilters from './HomeMobileFilters.vue'
 import HomeMobileLogList from './HomeMobileLogList.vue'
 
@@ -131,7 +131,7 @@ const favoriteOnlyModel = computed({
           <template #default="{ row }">
             <div class="journal-title-cell">
               <div class="journal-title-line">
-                <button type="button" @click="emit('detail', row.id)">{{ row.title }}</button>
+                <button type="button" @click="emit('detail', row.id)">{{ displayLogTitle(row) }}</button>
                 <el-tag v-if="row.favorite" type="warning" effect="light">收藏</el-tag>
               </div>
               <p>{{ previewLogContent(row.content) }}</p>

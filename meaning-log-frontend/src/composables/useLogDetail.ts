@@ -13,6 +13,7 @@ import {
   type LogNavigation,
   type MeaningLog,
 } from '../api/logs'
+import { displayLogTitle } from '../utils/logDisplay'
 import { runLogAnalyzeTask, runLogRefineTask, AiTaskFailedError } from '../api/aiTask'
 import { renderMarkdown } from '../utils/markdown'
 
@@ -194,7 +195,7 @@ export function useLogDetail(props: { id: number }) {
     if (!log.value) {
       return
     }
-    await ElMessageBox.confirm(`确定删除「${log.value.title}」吗？`, '删除日志', {
+    await ElMessageBox.confirm(`确定删除「${displayLogTitle(log.value)}」吗？`, '删除日志', {
       type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
     })
     await deleteLog(log.value.id)
