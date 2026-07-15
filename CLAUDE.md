@@ -59,7 +59,7 @@ npm run type-check # TypeScript 类型检查（不输出文件）
 
 **图片** 以二进制 Blob 存储在 `log_image` 表中（`LogImage.data` 字段），不使用对象存储。
 
-**数据库**：`resources/schema.sql` 在应用启动时自动执行（`spring.sql.init.mode=always`，带 `IF NOT EXISTS`），无版本化迁移工具。
+**数据库**：Flyway 版本化迁移（`resources/db/migration/` 下 V1 初始 schema、V2 ai_task、V3 community 三份），启动时自动执行。`spring.sql.init.mode=never`、`spring.flyway.enabled=true`、`baseline-on-migrate=true` 兼容已有数据库首次接入。
 
 **JWT token 版本**：`UserAccount` 有 `tokenVersion` 字段，修改密码时递增，使所有旧 Token 立即失效。JWT 由 `JwtService` 手动实现（HMAC-SHA256），非 Spring Security 官方库。
 

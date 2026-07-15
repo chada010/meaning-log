@@ -9,6 +9,8 @@
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3-FF6600)
 ![DeepSeek AI](https://img.shields.io/badge/AI-DeepSeek-6544A0)
 
+🌐 **在线体验**:[www.chada010.freeddns.org](https://www.chada010.freeddns.org)
+
 AI 辅助日记应用。用户写下日志后,AI「小记」自动生成标题、摘要、标签,并可与用户多轮对话精修输出。同时内置**社区模块**:日志一键发布到公开 feed,支持点赞、评论、关注、SSE 实时通知,形成"个人写作 → 公开分享"的完整闭环。
 
 **技术侧作为个人简历项目**,围绕真实业务复现了 MQ 异步化、Redis 多结构选型、Bitmap 幂等、分布式锁、SSE 双通道容灾、Resilience4j 熔断等工程能力,并配有 k6 压测数据(见 [性能压测](#性能压测))。
@@ -336,12 +338,6 @@ sequenceDiagram
 - `GET /api/logs/ai/reports/{reportId}/chat` — 报告对话历史
 
 </details>
-
----
-
-## 页面截图
-
-_前端手机端仍在优化中,截图后续补上。启动本地服务后可通过 [http://localhost:5173](http://localhost:5173) 直接体验。_
 
 ---
 
