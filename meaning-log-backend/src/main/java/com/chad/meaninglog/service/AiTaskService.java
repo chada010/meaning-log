@@ -6,7 +6,6 @@ import com.chad.meaninglog.entity.AiTaskStatus;
 import com.chad.meaninglog.entity.AiTaskType;
 import com.chad.meaninglog.entity.UserAccount;
 import com.chad.meaninglog.mq.AiTaskMessage;
-import com.chad.meaninglog.mq.producer.AiTaskProducer;
 import com.chad.meaninglog.repository.AiTaskRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class AiTaskService {
 
     private final AiTaskRepository aiTaskRepository;
-    private final AiTaskProducer aiTaskProducer;
+    private final AiTaskDeliveryService aiTaskDeliveryService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -36,6 +35,7 @@ public class AiTaskService {
         task.setStatus(AiTaskStatus.PENDING);
         task.setInputJson(serialize(input));
         task.setRetryCount(0);
+        task.setPublishAttempts(0);
         aiTaskRepository.insert(task);
 
         // 事务提交后再投递 MQ，避免 dual-write：
@@ -46,11 +46,11 @@ public class AiTaskService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    aiTaskProducer.send(message);
+                    aiTaskDeliveryService.publishImmediately(message);
                 }
             });
         } else {
-            aiTaskProducer.send(message);
+            aiTaskDeliveryService.publishImmediately(message);
         }
         return task;
     }

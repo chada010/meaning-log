@@ -6,6 +6,7 @@ import com.chad.meaninglog.entity.AiTaskStatus;
 import com.chad.meaninglog.mq.AiTaskMessage;
 import com.chad.meaninglog.repository.AiTaskRepository;
 import com.chad.meaninglog.service.AiTaskNotifier;
+import com.chad.meaninglog.service.AiTaskTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -27,15 +28,19 @@ public class AiTaskDlqListener {
             log.warn("DLQ received unknown AI task {}, dropping", taskId);
             return;
         }
-        if (task.getStatus() == AiTaskStatus.SUCCESS) {
-            log.warn("DLQ received AI task {} that is already SUCCESS, ignoring", taskId);
+        if (task.getStatus() != AiTaskStatus.PENDING) {
+            log.warn("DLQ received AI task {} in status {}, ignoring", taskId, task.getStatus());
             return;
         }
-        task.setStatus(AiTaskStatus.FAILED);
-        if (task.getErrorMessage() == null || task.getErrorMessage().isBlank()) {
-            task.setErrorMessage("Retries exhausted, moved to DLQ");
+        String errorMessage = task.getErrorMessage();
+        if (errorMessage == null || errorMessage.isBlank()) {
+            errorMessage = "Retries exhausted, moved to DLQ";
         }
-        aiTaskRepository.updateById(task);
+        int rows = aiTaskRepository.failPendingFromDlq(taskId, errorMessage, AiTaskTime.now());
+        if (rows == 0) {
+            log.warn("DLQ AI task {} changed state before failure update, ignoring", taskId);
+            return;
+        }
         aiTaskNotifier.publishDone(taskId);
         log.warn("AI task {} moved to FAILED after DLQ processing", taskId);
     }
