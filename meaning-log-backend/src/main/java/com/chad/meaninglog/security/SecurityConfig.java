@@ -56,6 +56,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/reset-password", "/api/auth/send-code").permitAll()
                         .requestMatchers("/api/trial/**").permitAll()
+                        .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
                                 "/swagger-ui.html", "/doc.html", "/webjars/**").authenticated()
                         .requestMatchers("/api/**").authenticated()

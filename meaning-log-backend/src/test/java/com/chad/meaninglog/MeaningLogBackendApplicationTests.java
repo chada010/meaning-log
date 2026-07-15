@@ -12,13 +12,19 @@ import com.chad.meaninglog.service.MeaningLogLifecycleService;
 import com.chad.meaninglog.service.XiaojiChatService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@AutoConfigureMockMvc
 @SpringBootTest(properties = {
         "jwt.secret=Z3J5bEJ4L2lxanFQU0xJMzVGcFhTc0cwWFFUTzVaWlNkRTY=",
         "spring.mail.password=test-smtp-password",
@@ -44,8 +50,18 @@ class MeaningLogBackendApplicationTests {
     @Autowired
     private XiaojiChatService xiaojiChatService;
 
+    @Autowired
+    private MockMvc mockMvc;
+
     @Test
     void contextLoads() {
+    }
+
+    @Test
+    void healthEndpointIsPublicAndReportsApplicationStatus() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
     }
 
     @Test

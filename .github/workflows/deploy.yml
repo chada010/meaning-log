@@ -1,0 +1,190 @@
+name: Deploy VPS
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      deploy_sha:
+        description: 已通过 CI 的 main 提交 SHA；留空时部署当前提交
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: vps-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.deploy_sha || github.sha }}
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/meaning-log-backend
+
+jobs:
+  build:
+    name: Build image
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+    steps:
+      - name: Validate deployment commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "deploy SHA must be a full 40-character commit hash" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - name: Verify commit belongs to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - id: image
+        name: Resolve image name
+        shell: bash
+        run: echo "name=$IMAGE_NAME:$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./meaning-log-backend
+          push: true
+          tags: ${{ steps.image.outputs.name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.DEPLOY_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy backend
+    needs: build
+    runs-on: ubuntu-latest
+    environment: vps-production
+    env:
+      TARGET_IMAGE: ${{ needs.build.outputs.image }}
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+      VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
+      GHCR_USERNAME: ${{ github.actor }}
+      GHCR_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - name: Validate VPS configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${VPS_HOST:?missing vps-production secret VPS_HOST}"
+          : "${VPS_USER:?missing vps-production secret VPS_USER}"
+          : "${VPS_SSH_PRIVATE_KEY:?missing vps-production secret VPS_SSH_PRIVATE_KEY}"
+          : "${VPS_KNOWN_HOSTS:?missing vps-production secret VPS_KNOWN_HOSTS}"
+          : "${VPS_DEPLOY_PATH:?missing vps-production variable VPS_DEPLOY_PATH}"
+          if [[ ! "$VPS_PORT" =~ ^[0-9]{1,5}$ ]]; then
+            echo "VPS_PORT must be a valid TCP port" >&2
+            exit 1
+          fi
+          if [[ ! "$VPS_DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+            echo "VPS_DEPLOY_PATH must be an absolute path without spaces" >&2
+            exit 1
+          fi
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_deploy"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+      - name: Deploy image
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_options=(
+            -i "$HOME/.ssh/id_deploy"
+            -p "$VPS_PORT"
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+          )
+          scp_options=(
+            -i "$HOME/.ssh/id_deploy"
+            -P "$VPS_PORT"
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+          )
+          remote_docker_config="/tmp/meaning-log-ghcr-$DEPLOY_SHA"
+
+          cleanup_registry_auth() {
+            printf -v remote_cleanup_command \
+              'docker --config %q logout ghcr.io >/dev/null 2>&1 || true; rm -f %q; rmdir %q 2>/dev/null || true' \
+              "$remote_docker_config" \
+              "$remote_docker_config/config.json" \
+              "$remote_docker_config"
+            # remote_cleanup_command only contains shell-escaped fixed deployment values.
+            # shellcheck disable=SC2029
+            ssh "${ssh_options[@]}" "$VPS_USER@$VPS_HOST" \
+              "$remote_cleanup_command" || true
+          }
+          trap cleanup_registry_auth EXIT
+
+          scp "${scp_options[@]}" docker-compose.prod.yml \
+            "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/docker-compose.prod.yml.next"
+
+          printf -v remote_login_command \
+            'umask 077; mkdir -p %q; docker --config %q login ghcr.io --username %q --password-stdin' \
+            "$remote_docker_config" "$remote_docker_config" "$GHCR_USERNAME"
+          # remote_login_command only contains shell-escaped fixed deployment values.
+          # shellcheck disable=SC2029
+          printf '%s' "$GHCR_TOKEN" | ssh "${ssh_options[@]}" \
+            "$VPS_USER@$VPS_HOST" "$remote_login_command"
+
+          printf -v remote_deploy_command 'bash -s -- %q %q %q' \
+            "$VPS_DEPLOY_PATH" "$TARGET_IMAGE" "$remote_docker_config"
+          # remote_deploy_command is escaped locally with printf %q.
+          # shellcheck disable=SC2029
+          ssh "${ssh_options[@]}" "$VPS_USER@$VPS_HOST" \
+            "$remote_deploy_command" < scripts/deploy-vps.sh
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          {
+            echo "### VPS deployment"
+            echo
+            echo "- Commit: $DEPLOY_SHA"
+            echo "- Image: $TARGET_IMAGE"
+            echo "- Environment: vps-production"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -497,19 +497,23 @@ proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 
 ---
 
-## 持续集成
+## CI/CD
 
-每个 push 和 PR 触发 GitHub Actions:
+每个 PR 和 `main` push 触发 GitHub Actions CI:
 
 - 前端:`npm test` + `npm run type-check` + `npm run build`
-- 后端:在临时 MySQL / Redis / RabbitMQ 服务中执行 `./mvnw test`
+- 后端:在临时 MySQL / Redis / RabbitMQ 服务中执行 `./mvnw verify`,完成测试与 JAR 打包
+- 部署配置:`bash -n` + 生产 Compose 结构校验
 
 CI 不使用真实 DeepSeek Key,也不调用外部 AI 接口。
+
+`main` 的 CI 全部成功后,部署工作流构建 commit SHA 镜像并推送 GHCR,再通过 SSH 更新 VPS 后端。生产 Secrets、首次启用、健康检查和回滚边界见 [`docs/deployment.md`](docs/deployment.md)。
 
 ## 开发文档
 
 - [`docs/development-baseline.md`](docs/development-baseline.md) — 开发基线与分层约束
 - [`docs/manual-acceptance-checklist.md`](docs/manual-acceptance-checklist.md) — 手工验收清单
 - [`docs/high-risk-areas.md`](docs/high-risk-areas.md) — 高风险改动区域
+- [`docs/deployment.md`](docs/deployment.md) — GitHub Actions 自动部署与 VPS 准备
 - [`scripts/loadtest/README.md`](scripts/loadtest/README.md) — 压测方案与完整数据
 - [`CLAUDE.md`](CLAUDE.md) — 项目架构说明(Claude Code 用)

@@ -29,7 +29,7 @@ WORKDIR /app
 
 ENV TZ=Asia/Shanghai
 
-RUN apk add --no-cache tzdata && \
+RUN apk add --no-cache tzdata curl && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
     addgroup -S app && \
