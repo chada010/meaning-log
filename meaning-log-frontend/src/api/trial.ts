@@ -14,6 +14,13 @@ interface PendingTrial {
   ai?: TrialAiResult
 }
 
+export type PendingTrialSaveStatus = 'saved' | 'quota-exceeded' | 'failed'
+
+export interface PendingTrialSaveResult {
+  status: PendingTrialSaveStatus
+  omittedImageCount: number
+}
+
 export const analyzeTrialLog = (data: MeaningLogRequest) => {
   return http.post<TrialAiResult>('/trial/analyze', data)
 }
@@ -21,8 +28,30 @@ export const analyzeTrialLog = (data: MeaningLogRequest) => {
 export const analyzeTrialLogStream = (data: MeaningLogRequest, onChunk?: (chunk: string) => void) =>
   streamFetchJson<TrialAiResult>('/trial/analyze/stream', data, onChunk)
 
-export const savePendingTrial = (pending: PendingTrial) => {
-  localStorage.setItem(PENDING_TRIAL_STORAGE_KEY, JSON.stringify(pending))
+export const savePendingTrial = (pending: PendingTrial): PendingTrialSaveResult => {
+  const omittedImageCount = pending.value.images?.length ?? 0
+  const safePending: PendingTrial = {
+    value: {
+      title: pending.value.title,
+      content: pending.value.content,
+      logDate: pending.value.logDate,
+      mood: pending.value.mood,
+      favorite: pending.value.favorite,
+    },
+    ai: pending.ai,
+  }
+  try {
+    localStorage.setItem(PENDING_TRIAL_STORAGE_KEY, JSON.stringify(safePending))
+    return { status: 'saved', omittedImageCount }
+  } catch (error) {
+    const errorName = typeof error === 'object' && error !== null && 'name' in error
+      ? String(error.name)
+      : ''
+    return {
+      status: errorName === 'QuotaExceededError' ? 'quota-exceeded' : 'failed',
+      omittedImageCount,
+    }
+  }
 }
 
 export const hasPendingTrial = () => Boolean(localStorage.getItem(PENDING_TRIAL_STORAGE_KEY))

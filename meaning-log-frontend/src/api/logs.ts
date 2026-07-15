@@ -2,27 +2,31 @@ import http from './http'
 
 export interface MeaningLog {
   id: number
-  title: string
+  title: string | null
   content: string
   logDate: string
-  mood?: string
-  aiTitle?: string
-  aiSummary?: string
-  aiTags?: string
+  mood?: string | null
+  aiTitle?: string | null
+  aiSummary?: string | null
+  aiTags?: string | null
   favorite: boolean
   images: LogImage[]
   createdAt: string
   updatedAt: string
 }
 
-export interface LogImage {
-  id?: number
+export interface LogImageRequest {
   fileName?: string
   caption?: string
+  contentType?: string
+  dataUrl: string
+}
+
+export interface LogImage extends LogImageRequest {
+  id?: number
   contentType: string
   fileSize?: number
   url?: string
-  dataUrl: string
 }
 
 export interface AiReport {
@@ -79,7 +83,7 @@ export interface MeaningLogRequest {
   logDate: string
   mood?: string
   favorite?: boolean
-  images?: LogImage[]
+  images?: LogImageRequest[]
 }
 
 export interface LogQueryParams {

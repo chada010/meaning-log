@@ -7,8 +7,11 @@ import {
   markNotificationRead,
   type NotificationItem,
 } from '../api/notifications'
+import { StreamFetchError, subscribeSseEvents } from '../api/stream'
 
 const POLL_INTERVAL_MS = 30_000
+const RECONNECT_INITIAL_DELAY_MS = 1_000
+const RECONNECT_MAX_DELAY_MS = 30_000
 const PAGE_SIZE = 20
 
 export const useNotificationStore = defineStore('notification', () => {
@@ -20,7 +23,11 @@ export const useNotificationStore = defineStore('notification', () => {
   const hasMore = ref(true)
   const initialized = ref(false)
 
-  let timer: number | null = null
+  let pollTimer: number | null = null
+  let reconnectTimer: number | null = null
+  let streamController: AbortController | null = null
+  let reconnectDelay = RECONNECT_INITIAL_DELAY_MS
+  let active = false
 
   const hasUnread = computed(() => unreadCount.value > 0)
 
@@ -34,15 +41,74 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   function startPolling() {
-    if (timer !== null) return
+    if (pollTimer !== null) return
     void refreshUnreadCount()
-    timer = window.setInterval(refreshUnreadCount, POLL_INTERVAL_MS)
+    pollTimer = window.setInterval(refreshUnreadCount, POLL_INTERVAL_MS)
   }
 
   function stopPolling() {
-    if (timer === null) return
-    window.clearInterval(timer)
-    timer = null
+    if (pollTimer === null) return
+    window.clearInterval(pollTimer)
+    pollTimer = null
+  }
+
+  function scheduleReconnect() {
+    if (!active || reconnectTimer !== null) return
+    const delay = reconnectDelay
+    reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY_MS)
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null
+      connectStream()
+    }, delay)
+  }
+
+  function connectStream() {
+    if (!active || streamController !== null) return
+    const controller = new AbortController()
+    streamController = controller
+
+    void subscribeSseEvents('/notifications/stream', ({ event }) => {
+      if (event === 'ready') {
+        reconnectDelay = RECONNECT_INITIAL_DELAY_MS
+        stopPolling()
+        return
+      }
+      if (event === 'notification') {
+        void refreshUnreadCount()
+      }
+    }, controller.signal).catch((error: unknown) => {
+      if (!active || controller.signal.aborted) return
+      if (error instanceof StreamFetchError && error.status === 401) {
+        stop()
+        return
+      }
+      startPolling()
+      scheduleReconnect()
+    }).finally(() => {
+      if (streamController === controller) {
+        streamController = null
+      }
+    })
+  }
+
+  function start() {
+    if (active) return
+    active = true
+    reconnectDelay = RECONNECT_INITIAL_DELAY_MS
+    startPolling()
+    connectStream()
+  }
+
+  function stop() {
+    active = false
+    stopPolling()
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    streamController?.abort()
+    streamController = null
+    reconnectDelay = RECONNECT_INITIAL_DELAY_MS
   }
 
   function decrementUnread(by = 1) {
@@ -112,7 +178,7 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   function reset() {
-    stopPolling()
+    stop()
     clearUnread()
     resetList()
     drawerOpen.value = false
@@ -127,8 +193,8 @@ export const useNotificationStore = defineStore('notification', () => {
     initialized,
     hasUnread,
     refreshUnreadCount,
-    startPolling,
-    stopPolling,
+    start,
+    stop,
     decrementUnread,
     clearUnread,
     loadFirstPage,

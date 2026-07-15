@@ -51,7 +51,7 @@ const {
       <div class="image-upload-area">
         <input :ref="setImageInputRef" class="image-file-input" type="file" accept="image/*" multiple @change="handleImageChange" />
         <button class="image-upload-button" type="button" @click="openImagePicker">添加图片</button>
-        <p class="image-upload-tip">可选，最多3张。上传后可以先看预览，也可以给每张图留一句说明。</p>
+        <p class="image-upload-tip">可选，最多3张。图片不会进入自动草稿，离开页面前请先保存日志。</p>
         <div v-if="form.images?.length" class="image-preview-grid">
           <div
             v-for="(image, index) in form.images" :key="`${image.fileName}-${index}`" class="image-preview-item"

@@ -10,14 +10,7 @@ import {
   type MeaningLog,
 } from '../api/logs'
 import { displayLogTitle } from '../utils/logDisplay'
-
-const getToday = () => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+import { formatLocalDate } from '../utils/localDate'
 
 export const useHomeLogs = () => {
   const router = useRouter()
@@ -103,7 +96,7 @@ export const useHomeLogs = () => {
     try {
       const { data } = await createLog({
         content,
-        logDate: getToday(),
+        logDate: formatLocalDate(new Date()),
         favorite: false,
         images: [],
       })

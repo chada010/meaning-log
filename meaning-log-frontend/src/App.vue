@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { Bell, ChatDotRound, Connection, DataAnalysis, DocumentAdd, House, UserFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
@@ -28,7 +28,7 @@ const openNotificationDrawer = () => {
 
 onMounted(() => {
   if (authStore.isLoggedIn) {
-    notificationStore.startPolling()
+    notificationStore.start()
   }
 })
 
@@ -36,12 +36,16 @@ watch(
   () => authStore.isLoggedIn,
   (loggedIn) => {
     if (loggedIn) {
-      notificationStore.startPolling()
+      notificationStore.start()
     } else {
       notificationStore.reset()
     }
   },
 )
+
+onBeforeUnmount(() => {
+  notificationStore.stop()
+})
 </script>
 
 <template>

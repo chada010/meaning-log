@@ -1,5 +1,6 @@
 package com.chad.meaninglog.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -28,6 +29,7 @@ public class MeaningLogRequest {
 
     private Boolean favorite;
 
+    @Valid
     @Size(max = 3, message = "最多上传3张图片")
-    private List<LogImageRequest> images;
+    private List<@NotNull(message = "图片信息不能为空") LogImageRequest> images;
 }

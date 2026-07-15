@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { StreamFetchError, streamFetch, streamFetchJson } from './stream'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { StreamFetchError, streamFetch, streamFetchJson, subscribeSseEvents } from './stream'
 
 const encoder = new TextEncoder()
 
@@ -107,6 +107,40 @@ describe('streamFetchJson', () => {
     mockResponse(streamResponse(['data: {"title":"draft"}\n\n']))
 
     await expect(streamFetchJson('/refine', {})).rejects.toSatisfy(isStreamError('incomplete'))
+  })
+})
+
+describe('subscribeSseEvents', () => {
+  it('使用 Bearer Header 建立 GET SSE，并解析通知事件', async () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: { getItem: () => 'test-token' },
+    })
+    const messages: Array<{ event: string; data: string }> = []
+    globalThis.fetch = vi.fn(async () => streamResponse([
+      'event: ready\ndata: ok\n\n',
+      'event: notification\ndata: {"id":1}\n\n',
+    ]))
+
+    await expect(subscribeSseEvents(
+      '/notifications/stream',
+      (message) => messages.push(message),
+    )).rejects.toSatisfy(isStreamError('incomplete'))
+
+    expect(messages).toEqual([
+      { event: 'ready', data: 'ok' },
+      { event: 'notification', data: '{"id":1}' },
+    ])
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/notifications/stream'),
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Accept: 'text/event-stream',
+          Authorization: 'Bearer test-token',
+        },
+      }),
+    )
   })
 })
 

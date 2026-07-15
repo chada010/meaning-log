@@ -61,4 +61,19 @@ describe('HomeMobileLogList', () => {
     await mainButton.trigger('click')
     expect(wrapper.emitted('detail')).toEqual([[log.id]])
   })
+
+  it('title 为 null 时显示统一占位文案', () => {
+    const wrapper = shallowMount(HomeMobileLogList, {
+      props: { logs: [{ ...log, title: null, aiTitle: null }] },
+      global: {
+        stubs: {
+          ElButton: ButtonStub,
+          ElDropdown: { template: '<span><slot /></span>' },
+          ElTag: { template: '<span><slot /></span>' },
+        },
+      },
+    })
+
+    expect(wrapper.get('.mobile-log-title').text()).toBe('未命名的一天')
+  })
 })
