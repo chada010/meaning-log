@@ -17,6 +17,7 @@ public class TrialAnalyzeRequest {
     private String title;
 
     @NotBlank(message = "内容不能为空")
+    @Size(max = 20000, message = "内容不能超过 2 万字")
     private String content;
 
     @NotNull(message = "日期不能为空")
