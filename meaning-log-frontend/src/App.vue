@@ -4,6 +4,7 @@ import { Bell, ChatDotRound, Connection, DataAnalysis, DocumentAdd, House, UserF
 import { useRouter } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
 import { useNotificationStore } from './stores/notificationStore'
+import NotificationDrawer from './components/notifications/NotificationDrawer.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -11,8 +12,7 @@ const notificationStore = useNotificationStore()
 
 const logout = () => {
   authStore.logout()
-  notificationStore.stopPolling()
-  notificationStore.clearUnread()
+  notificationStore.reset()
   router.push({ name: 'login' })
 }
 
@@ -22,8 +22,8 @@ const handleAccountCommand = (command: string) => {
   }
 }
 
-const goNotifications = () => {
-  router.push({ name: 'community' })
+const openNotificationDrawer = () => {
+  void notificationStore.openDrawer()
 }
 
 onMounted(() => {
@@ -38,8 +38,7 @@ watch(
     if (loggedIn) {
       notificationStore.startPolling()
     } else {
-      notificationStore.stopPolling()
-      notificationStore.clearUnread()
+      notificationStore.reset()
     }
   },
 )
@@ -64,7 +63,7 @@ watch(
         <RouterLink to="/xiaoji">小记</RouterLink>
       </nav>
 
-      <div v-if="authStore.isLoggedIn" class="header-account desktop-account">
+      <div v-if="authStore.isLoggedIn" class="header-tools">
         <el-badge
           :value="notificationStore.unreadCount"
           :hidden="!notificationStore.hasUnread"
@@ -77,23 +76,19 @@ watch(
             size="small"
             :icon="Bell"
             title="通知"
-            @click="goNotifications"
+            @click="openNotificationDrawer"
           />
         </el-badge>
-        <span>{{ authStore.user?.username }}</span>
-        <el-button size="small" plain @click="logout">退出</el-button>
-      </div>
 
-      <el-dropdown
-        v-if="authStore.isLoggedIn"
-        class="mobile-account"
-        trigger="click"
-        @command="handleAccountCommand"
-      >
-        <el-badge
-          :value="notificationStore.unreadCount"
-          :hidden="!notificationStore.hasUnread"
-          :max="99"
+        <div class="header-account desktop-account">
+          <span>{{ authStore.user?.username }}</span>
+          <el-button size="small" plain @click="logout">退出</el-button>
+        </div>
+
+        <el-dropdown
+          class="mobile-account"
+          trigger="click"
+          @command="handleAccountCommand"
         >
           <el-button
             class="mobile-account-trigger"
@@ -101,14 +96,14 @@ watch(
             :icon="UserFilled"
             title="账户菜单"
           />
-        </el-badge>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item disabled>{{ authStore.user?.username }}</el-dropdown-item>
-            <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item disabled>{{ authStore.user?.username }}</el-dropdown-item>
+              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
 
       <nav v-else class="header-nav">
         <RouterLink to="/login">登录</RouterLink>
@@ -130,14 +125,7 @@ watch(
         <span>新增</span>
       </RouterLink>
       <RouterLink to="/community">
-        <el-badge
-          :value="notificationStore.unreadCount"
-          :hidden="!notificationStore.hasUnread"
-          :max="99"
-          is-dot
-        >
-          <el-icon><Connection /></el-icon>
-        </el-badge>
+        <el-icon><Connection /></el-icon>
         <span>社区</span>
       </RouterLink>
       <RouterLink to="/ai-reports">
@@ -149,5 +137,7 @@ watch(
         <span>小记</span>
       </RouterLink>
     </nav>
+
+    <NotificationDrawer v-if="authStore.isLoggedIn" />
   </el-container>
 </template>
