@@ -1,134 +1,87 @@
 package com.chad.meaninglog.security;
 
 import com.chad.meaninglog.entity.UserAccount;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.Date;
 
 @Service
 public class JwtService {
 
     private static final int MINIMUM_SECRET_BYTES = 32;
-    private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
-    private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
-    };
 
-    private final ObjectMapper objectMapper;
-    private final byte[] secret;
+    private final SecretKey key;
     private final long expirationMs;
 
     public JwtService(
-            ObjectMapper objectMapper,
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration-ms}") long expirationMs
     ) {
-        this.objectMapper = objectMapper;
-        this.secret = validateSecret(secret);
+        this.key = Keys.hmacShaKeyFor(validateSecret(secret));
         this.expirationMs = expirationMs;
     }
 
     public String generateToken(UserAccount user) {
         Instant now = Instant.now();
-        Map<String, Object> header = Map.of(
-                "alg", "HS256",
-                "typ", "JWT"
-        );
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("sub", user.getEmail());
-        payload.put("userId", user.getId());
-        payload.put("username", user.getUsername());
-        payload.put("tokenVersion", user.getTokenVersion());
-        payload.put("iat", now.getEpochSecond());
-        payload.put("exp", now.plusMillis(expirationMs).getEpochSecond());
-
-        String headerPart = encodeJson(header);
-        String payloadPart = encodeJson(payload);
-        String signingInput = headerPart + "." + payloadPart;
-        return signingInput + "." + sign(signingInput);
+        return Jwts.builder()
+                .subject(user.getEmail())
+                .claim("userId", user.getId())
+                .claim("username", user.getUsername())
+                .claim("tokenVersion", user.getTokenVersion())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusMillis(expirationMs)))
+                .signWith(key, Jwts.SIG.HS256)
+                .compact();
     }
 
     public String extractEmail(String token) {
-        Map<String, Object> payload = readPayload(token);
-        Object subject = payload.get("sub");
-        return subject instanceof String email ? email : null;
+        VerifiedToken verifiedToken = parseToken(token);
+        return verifiedToken == null ? null : verifiedToken.email();
     }
 
     public boolean isValid(String token, UserAccount user) {
-        if (!hasValidSignature(token)) {
-            return false;
-        }
-        String email = extractEmail(token);
-        return email != null
-                && email.equals(user.getEmail())
-                && hasCurrentTokenVersion(token, user)
-                && !isExpired(token);
+        return isValid(parseToken(token), user);
     }
 
-    private boolean hasCurrentTokenVersion(String token, UserAccount user) {
-        Object tokenVersion = readPayload(token).get("tokenVersion");
-        return tokenVersion instanceof Number number && number.intValue() == user.getTokenVersion();
-    }
-
-    private boolean isExpired(String token) {
-        Map<String, Object> payload = readPayload(token);
-        Object exp = payload.get("exp");
-        if (!(exp instanceof Number number)) {
-            return true;
-        }
-        return Instant.now().getEpochSecond() >= number.longValue();
+    public boolean isValid(VerifiedToken token, UserAccount user) {
+        return token != null
+                && user != null
+                && token.email().equals(user.getEmail())
+                && token.tokenVersion() == user.getTokenVersion();
     }
 
     public boolean hasValidSignature(String token) {
-        String[] parts = token.split("\\.");
-        if (parts.length != 3) {
-            return false;
-        }
-        String expected = sign(parts[0] + "." + parts[1]);
-        return MessageDigest.isEqual(
-                expected.getBytes(StandardCharsets.UTF_8),
-                parts[2].getBytes(StandardCharsets.UTF_8)
-        );
+        return parseToken(token) != null;
     }
 
-    private Map<String, Object> readPayload(String token) {
+    public VerifiedToken parseToken(String token) {
         try {
-            String[] parts = token.split("\\.");
-            if (parts.length != 3) {
-                return Map.of();
+            Jws<Claims> signedClaims = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token);
+            if (!Jwts.SIG.HS256.getId().equals(signedClaims.getHeader().getAlgorithm())) {
+                return null;
             }
-            byte[] payload = URL_DECODER.decode(parts[1]);
-            return objectMapper.readValue(payload, MAP_TYPE);
-        } catch (Exception ex) {
-            return Map.of();
-        }
-    }
-
-    private String encodeJson(Map<String, Object> value) {
-        try {
-            return URL_ENCODER.encodeToString(objectMapper.writeValueAsBytes(value));
-        } catch (Exception ex) {
-            throw new IllegalStateException("Failed to create JWT", ex);
-        }
-    }
-
-    private String sign(String value) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret, "HmacSHA256"));
-            return URL_ENCODER.encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception ex) {
-            throw new IllegalStateException("Failed to sign JWT", ex);
+            Claims claims = signedClaims.getPayload();
+            Object tokenVersion = claims.get("tokenVersion");
+            if (claims.getSubject() == null
+                    || claims.getExpiration() == null
+                    || !(tokenVersion instanceof Number number)) {
+                return null;
+            }
+            return new VerifiedToken(claims.getSubject(), number.intValue());
+        } catch (JwtException | IllegalArgumentException ex) {
+            return null;
         }
     }
 
@@ -157,5 +110,8 @@ public class JwtService {
             }
         }
         return true;
+    }
+
+    public record VerifiedToken(String email, int tokenVersion) {
     }
 }

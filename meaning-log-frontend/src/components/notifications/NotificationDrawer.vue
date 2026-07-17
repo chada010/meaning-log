@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChatDotRound, Check, UserFilled } from '@element-plus/icons-vue'
+import { ChatDotRound, Check, Close, UserFilled } from '@element-plus/icons-vue'
 import { ElDrawer, ElIcon, ElSkeleton } from 'element-plus'
 import { useNotificationStore } from '../../stores/notificationStore'
 import type { NotificationItem } from '../../api/notifications'
@@ -82,12 +82,23 @@ const initialLoading = computed(() => store.loading && !store.initialized)
   >
     <div class="notification-drawer__inner">
       <header class="notification-drawer__header">
-        <div>
-          <p class="eyebrow">Inbox</p>
-          <h2>通知</h2>
-          <p class="notification-drawer__subtitle">
-            {{ store.hasUnread ? `有 ${store.unreadCount} 条新消息等着你` : '暂时没有新消息' }}
-          </p>
+        <div class="notification-drawer__header-main">
+          <button
+            type="button"
+            class="notification-drawer__close"
+            aria-label="关闭通知"
+            title="关闭通知"
+            @click="store.closeDrawer()"
+          >
+            <el-icon><Close /></el-icon>
+          </button>
+          <div class="notification-drawer__heading">
+            <p class="eyebrow">Inbox</p>
+            <h2>通知</h2>
+            <p class="notification-drawer__subtitle">
+              {{ store.hasUnread ? `有 ${store.unreadCount} 条新消息等着你` : '暂时没有新消息' }}
+            </p>
+          </div>
         </div>
         <button
           type="button"
