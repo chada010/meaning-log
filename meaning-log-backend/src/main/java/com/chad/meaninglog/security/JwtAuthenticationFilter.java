@@ -41,18 +41,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authorization.substring("Bearer ".length()).trim();
-        if (!jwtService.hasValidSignature(token)) {
+        JwtService.VerifiedToken verifiedToken = jwtService.parseToken(token);
+        if (verifiedToken == null) {
             writeUnauthorized(response, "登录状态已过期，请重新登录");
             return;
         }
-        String email = jwtService.extractEmail(token);
-        if (email == null) {
-            writeUnauthorized(response, "登录状态已过期，请重新登录");
-            return;
-        }
+        String email = verifiedToken.email();
 
         UserAccount user = userAccountRepository.findByEmail(email).orElse(null);
-        if (user == null || !jwtService.isValid(token, user)) {
+        if (user == null || !jwtService.isValid(verifiedToken, user)) {
             writeUnauthorized(response, "登录状态已过期，请重新登录");
             return;
         }

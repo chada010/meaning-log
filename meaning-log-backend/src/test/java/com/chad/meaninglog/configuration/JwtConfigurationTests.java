@@ -1,7 +1,6 @@
 package com.chad.meaninglog.configuration;
 
 import com.chad.meaninglog.security.JwtService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
@@ -147,14 +146,9 @@ class JwtConfigurationTests {
     static class JwtServiceConfiguration {
 
         @Bean
-        ObjectMapper objectMapper() {
-            return new ObjectMapper();
-        }
-
-        @Bean
-        JwtService jwtService(ObjectMapper objectMapper, @Value("${jwt.secret}") String secret,
+        JwtService jwtService(@Value("${jwt.secret}") String secret,
                               @Value("${jwt.expiration-ms}") long expirationMs) {
-            return new JwtService(objectMapper, secret, expirationMs);
+            return new JwtService(secret, expirationMs);
         }
     }
 }
