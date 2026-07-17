@@ -229,7 +229,7 @@ sequenceDiagram
 | 层 | 技术 |
 |---|---|
 | 前端 | Vue 3.5 · TypeScript · Vite · Pinia · Vue Router · Element Plus |
-| 后端 | Spring Boot 3.5.14 · Java 17 · MyBatis-Plus 3.5.16 · Spring Security · 手撸 JWT (HMAC-SHA256) |
+| 后端 | Spring Boot 3.5.14 · Java 17 · MyBatis-Plus 3.5.16 · Spring Security · JJWT 0.12.6 (HS256 · tokenVersion 强制失效) |
 | 数据库 | MySQL 8 · Flyway V1-V6 · 空库与 V4 升级链 Testcontainers 验证 |
 | 缓存 & 数据结构 | Redis 7(ZSet · Bitmap · HyperLogLog · Set · String · Pipeline · Lua 版本栅栏) |
 | 消息队列 | RabbitMQ 3(AI 任务队列 · DLQ · 通知队列) |
