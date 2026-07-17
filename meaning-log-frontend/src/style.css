@@ -1908,7 +1908,7 @@ button.community-post__stat {
   gap: 12px;
 }
 
-.notification-drawer .el-drawer {
+.notification-drawer.el-drawer {
   background:
     radial-gradient(circle at 12% 8%, rgba(119, 203, 185, 0.18), transparent 40%),
     radial-gradient(circle at 90% 92%, rgba(242, 184, 162, 0.16), transparent 45%),
@@ -1931,11 +1931,50 @@ button.community-post__stat {
 }
 
 .notification-drawer__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 14px;
   padding-bottom: 6px;
+}
+
+.notification-drawer__header-main {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-width: 0;
+}
+
+.notification-drawer__heading {
+  min-width: 0;
+}
+
+.notification-drawer__close {
+  display: grid;
+  flex: 0 0 44px;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(63, 157, 141, 0.28);
+  border-radius: 50%;
+  color: #344f47;
+  background: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  font-size: 18px;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.notification-drawer__close:hover {
+  border-color: var(--mint-deep);
+  color: var(--mint-deep);
+  background: #fff;
+}
+
+.notification-drawer__close:focus-visible {
+  outline: 2px solid var(--mint-deep);
+  outline-offset: 2px;
 }
 
 .notification-drawer__header .eyebrow {
@@ -1963,6 +2002,7 @@ button.community-post__stat {
 .notification-drawer__mark-all {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 6px;
   padding: 8px 14px;
   border: 1px solid rgba(63, 157, 141, 0.35);
@@ -2159,13 +2199,22 @@ button.community-post__stat {
 }
 
 @media (max-width: 640px) {
-  .notification-drawer .el-drawer {
+  .notification-drawer.el-drawer {
     width: 92vw !important;
     max-width: 420px;
   }
 
   .notification-drawer__inner {
     padding: 22px 18px 20px;
+  }
+
+  .notification-drawer__header {
+    gap: 10px;
+  }
+
+  .notification-drawer__mark-all {
+    gap: 4px;
+    padding: 8px 10px;
   }
 }
 
