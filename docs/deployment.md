@@ -51,3 +51,17 @@ ssh-keyscan -p 22 your-vps.example.com
 2. 首次执行建议给 Environment 增加人工审批，观察镜像拉取、Flyway 和健康检查日志。
 3. 确认一至两次部署稳定后，可移除人工审批，实现 `main CI 成功 → 自动部署`。
 4. 如果自动部署失败，先查看 Actions 中的后端日志和回滚结果，不要直接删除 volume 或清空数据库。
+
+## 生产入口与 Tunnel（运行时）
+
+GitHub Actions 只负责把后端镜像部署到 **App VPS**（阿里云，`/opt/meaning-log`）。公网 API 入口不在 Actions 里改写，而是：
+
+1. 浏览器访问 `https://han.zhaisir.com/api/*`
+2. Vercel `vercel.json` Rewrite 到 `https://api.chada010.me/api/:path*`
+3. Cloudflare Named Tunnel hostname `api.chada010.me`
+4. Tunnel **connector** 跑在可访问 Cloudflare Edge 的 **Relay VPS**（当前为 dedirock）
+5. Relay 经 SSH RemoteForward 访问 App VPS 的 `127.0.0.1:8080`
+
+运维细节与常用命令见根目录 `CLAUDE.md` 的「生产部署」章节。App VPS 本地 SSH 别名为 `zbvps`。
+
+若 API 返回 Cloudflare 530/1033，优先检查 Relay 上 `cloudflared-meaning-log` 与 App 上 `meaning-log-relay`，而不是先怀疑账号密码或 GHCR 镜像。
