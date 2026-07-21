@@ -150,57 +150,62 @@ Gleam DNS (A → 76.76.21.21，代理关闭)
   ↓
 Vercel
   ├─ /* → Vue 静态前端
-  └─ /api/* → vercel.json 外部 Rewrite
-                 ↓ 当前 trycloudflare.com Quick Tunnel
-VPS 47.108.155.138 (阿里云成都 2GB)
-  ├─ /etc/systemd/system/cf-tunnel.service (cloudflared → 127.0.0.1:8080)
+  └─ /api/* → vercel.json 外部 Rewrite → https://api.chada010.me/api/:path*
+                 ↓ Cloudflare Named Tunnel (hostname: api.chada010.me)
+Relay VPS (dedirock / 海外，可连 Cloudflare Edge)
+  ├─ cloudflared-meaning-log.service  (connector, protocol=http2)
+  └─ 127.0.0.1:8080 ← SSH RemoteForward
+                 ↓
+App VPS 47.108.155.138 (阿里云成都 2GB)  SSH 别名: zbvps
+  ├─ meaning-log-relay.service  (ssh -R 8080:127.0.0.1:8080 → dedirock)
   └─ /opt/meaning-log/docker-compose.prod.yml
-       ├─ backend (Spring Boot :8080)
+       ├─ backend (Spring Boot 127.0.0.1:8080)
        ├─ mysql
        ├─ redis
        └─ rabbitmq
 ```
 
-**为什么走 Tunnel**：阿里云 ECS 未做 ICP 关联时对海外来源 80/443 有网络层拦截，CF Flexible 报 521、certbot HTTP-01 也不通。Tunnel 是 VPS 主动出站，绕开入站拦截。
+**为什么走 Tunnel**：阿里云 ECS 未做 ICP 关联时对海外来源 80/443 有网络层拦截；Tunnel 是主动出站。
+
+**为什么 connector 不在阿里云本机**：该机出网到 Cloudflare Edge（QUIC/HTTP2 7844）不稳定或被拦，会报 530/1033。当前把 Named Tunnel connector 放在可访问 CF 的 relay 机，阿里云只跑业务容器，经 SSH 反代暴露 `127.0.0.1:8080`。
+
+> 注意：relay 机上若另有服务占用 `127.0.0.1:8080`，需改端口或让出该端口（当前 sub2api 已改绑 `127.0.0.1:18081`）。
 
 ### VPS 访问
 
-本地 `~/.ssh/config` 已配 `myvps` 别名（ed25519 免密）：
+本地 `~/.ssh/config` 使用别名 **`zbvps`**（ed25519 免密，root@47.108.155.138:22）：
 
 ```bash
-ssh myvps
+ssh zbvps
 ```
 
-Claude 应直接用 `ssh myvps '<cmd>'` 免密执行远程命令，不要让用户手动跑 VPS 命令。
+Agent 应直接用 `ssh zbvps '<cmd>'` 免密执行远程命令，不要让用户手动跑 VPS 命令。
 
-### 单域名与 Quick Tunnel
+### 单域名与 Named Tunnel
 
-生产入口为 `https://han.zhaisir.com`。前端生产构建固定使用 `VITE_API_BASE_URL=/api`；Vercel 根据 `meaning-log-frontend/vercel.json` 将 `/api/*` 转发到 Quick Tunnel，因此浏览器只访问同一个域名。
+生产入口为 `https://han.zhaisir.com`。前端生产构建固定使用 `VITE_API_BASE_URL=/api`；Vercel 根据 `meaning-log-frontend/vercel.json` 将 `/api/*` 转发到 **`https://api.chada010.me`**（固定 Named Tunnel 域名，不再依赖 trycloudflare 随机 URL）。
 
-当前使用 `cloudflared tunnel --url http://localhost:8080` 的 **quick tunnel**，每次 `systemctl restart cf-tunnel` 都会换 URL。更新流程：
+`han.zhaisir.com` 是免费二级域名，不控制一级域名 `zhaisir.com` 的 Cloudflare Zone；API 使用自有域名 `api.chada010.me` 绑定 Named Tunnel。不要修改 `zhaisir.com` Nameserver。
 
-1. 查当前 URL：
-   ```bash
-   ssh myvps 'grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" /var/log/cloudflared.log | tail -1'
-   ```
-2. 更新 `meaning-log-frontend/vercel.json` 中 Rewrite 的目标域名，保留 `/api/:path*` 路径映射。
-3. 从仓库根目录强制部署 Vercel：`npx -y vercel@latest deploy --prod --force --yes --cwd .`。
-4. 验证 `https://han.zhaisir.com/api/auth/login` 返回后端业务响应，而不是 Vercel 405 或 Cloudflare 错误页。
+### 关键路径与服务
 
-`han.zhaisir.com` 是免费二级域名，不控制一级域名 `zhaisir.com` 的 Cloudflare Zone，因此不能使用自有 Named Tunnel 绑定该 hostname。不要修改一级域名 Nameserver。
-
-### 关键路径
-
-VPS `/opt/meaning-log/`：
-- `.env.prod` — 生产环境变量（11 字段全填）
+App VPS `/opt/meaning-log/`：
+- `.env.prod` — 生产环境变量（勿提交）
 - `docker-compose.prod.yml`
-- `railway-dump.sql` — 从 Railway 迁出的历史数据（首次导入用，之后可归档）
+- `railway-dump.sql` — 历史导入数据（可归档）
 
-VPS `/etc/systemd/system/cf-tunnel.service` — Cloudflare Tunnel systemd 单元
+App VPS systemd：
+- `meaning-log-relay.service` — SSH 反代到 relay（依赖 `/root/.ssh` 中 `dedirock-relay`）
+
+Relay VPS：
+- `/etc/meaning-log/cloudflared.env` — `TUNNEL_TOKEN` + `TUNNEL_TRANSPORT_PROTOCOL=http2`（勿提交）
+- `cloudflared-meaning-log.service` — Named Tunnel connector
+
+阿里云上旧的 `cf-tunnel.service`（Quick Tunnel）与本机 `cloudflared-meaning-log` 已停用，勿再当作生产入口。
 
 ### Docker 镜像加速
 
-VPS `/etc/docker/daemon.json`：
+App VPS `/etc/docker/daemon.json`：
 ```json
 {"registry-mirrors":["https://docker.1ms.run","https://docker.imgdb.de"]}
 ```
@@ -209,24 +214,33 @@ daocloud / tencentyun 镜像源已失效，勿使用。
 ### 常用命令
 
 ```bash
-# 查当前 Quick Tunnel URL
-ssh myvps 'grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" /var/log/cloudflared.log | tail -1'
+# 健康检查（公网）
+curl -sS https://api.chada010.me/actuator/health
+curl -sS -X POST https://han.zhaisir.com/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"identifier":"x","password":"y"}'
 
-# 查容器状态
-ssh myvps 'docker ps --format "table {{.Names}}\t{{.Status}}"'
+# App VPS：容器与反代
+ssh zbvps 'docker ps --format "table {{.Names}}\t{{.Status}}"'
+ssh zbvps 'systemctl status meaning-log-relay --no-pager'
+ssh zbvps 'docker compose -f /opt/meaning-log/docker-compose.prod.yml logs --tail 50 backend'
+ssh zbvps 'cd /opt/meaning-log && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d backend'
 
-# 查 backend 日志
-ssh myvps 'docker compose -f /opt/meaning-log/docker-compose.prod.yml logs --tail 50 backend'
-
-# 改 .env.prod 后重启 backend
-ssh myvps 'cd /opt/meaning-log && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d backend'
-
-# 重启 Quick Tunnel（会换 URL！随后更新 vercel.json Rewrite 并重新部署）
-ssh myvps 'systemctl restart cf-tunnel'
+# Relay：tunnel connector（在 dedirock 上）
+ssh dedirock-01 'systemctl status cloudflared-meaning-log --no-pager'
+ssh dedirock-01 'curl -sS http://127.0.0.1:8080/actuator/health'
 ```
+
+### 故障速查
+
+| 现象 | 优先检查 |
+|---|---|
+| 登录失败 / API 530 / Cloudflare 1033 | relay 上 `cloudflared-meaning-log` 是否 active；`curl 127.0.0.1:8080/actuator/health` |
+| relay 本机 8080 不是 meaning-log | App 侧 `meaning-log-relay`；是否被其他容器占用 8080 |
+| 后端本身 unhealthy | App 侧 `docker ps` / backend 日志 / `.env.prod` |
 
 ### 网络踩坑速查
 
-- 本地 → GitHub：直连不通，`git push` 需带代理：`git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 push`
-- VPS → GitHub：已配 `git config url."https://ghfast.top/https://github.com/".insteadOf`；`curl` release 用 `curl https://ghfast.top/https://github.com/...`
-- VPS → `1.1.1.1` UDP 53 超时：`dig` 用 `@223.5.5.5`（阿里云 DNS）
+- 本地 → GitHub：直连不通时，`git push` 带代理：`git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 push`
+- App VPS → GitHub：可用 `ghfast.top` 镜像；`dig` 用 `@223.5.5.5`
+- App VPS → Cloudflare Edge 7844：可能失败，这是 connector 迁到 relay 的原因
